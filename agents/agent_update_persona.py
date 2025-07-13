@@ -44,7 +44,7 @@ class AgentUpdatePersona(OpenAIClientRunner):
 
     def __call__(self, *args, **kwargs):
         messages = self.gen_prompt_update_persona(*args, **kwargs)
-        response = self._call_gpt_retry(messages, max_tokens=1024)
+        response = self._call_gpt_retry(messages, max_tokens=None)
         return response
 
 
