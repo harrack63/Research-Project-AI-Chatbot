@@ -6,6 +6,7 @@ class PersonaState(TypedDict, total=False):
     age: Optional[int]  # years
     sex_at_birth: Optional[Literal["male", "female", "other"]]
     race: Optional[str]
+    culture: Optional[str]
     marital_status: Optional[str]
 
     # 🔹 Body Measurements
