@@ -98,9 +98,7 @@ def persona_agent(state: ChatbotState) -> Command[Literal["chat_agent"]]:
         except Exception:
             updates = {}
         # update persona dict in place (non-empty dict expected)
-        state["persona"].update(updates or {})
-        save_state(state, "out/chatbot_state.json")
-
+        state["persona"].update(updates)
         if DEBUG:
             print("Will go to END")
         # return Command(goto=END)
@@ -149,8 +147,7 @@ def chat_agent(state: ChatbotState) -> Command[Literal["persona_agent"]]:
     )
 
 
-if __name__ == "__main__":
-    # --- Build the graph ---
+def init_graph():
     graph = StateGraph(ChatbotState)  # Pass the state schema as required
     graph.add_edge(START, "persona_agent")
     graph.add_node("persona_agent", persona_agent)
@@ -160,15 +157,39 @@ if __name__ == "__main__":
     # graph.add_edge("persona_agent", END)
 
     graph_agent = graph.compile()
+    return graph_agent
 
-    state: ChatbotState = {
-        "persona": PersonaState(),
-        "chat_history": [],
-        "persona_update_status": "pre_chat",
-        "user_msg": "Hi, I have hypertension and want advice.",
-    }
+
+def chat(exp_name: str, user_msg: str) -> ChatbotState:
+    if os.path.exists(f"out/{exp_name}/chatbot_state.json"):
+        state = load_state(f"out/{exp_name}/chatbot_state.json")
+    else:
+        state = {
+            "persona": PersonaState(),
+            "chat_history": [],
+            "persona_update_status": "pre_chat",
+        }
+    state["user_msg"] = user_msg
+    state["persona_update_status"] = "pre_chat"
+    return state
+
+
+if __name__ == "__main__":
+    # --- Build the graph ---
+    graph_agent = init_graph()
+
+    # --- Run the experiment ---
+    exp_name = "case_1_hypertension"
+    state = chat(
+        exp_name,
+        "Hi, My hypertension has gotten worse. I want to know what to do. Do you think it is due to your previous health suggestions?",
+    )
 
     final_state = graph_agent.invoke(state)
+
+    # --- Save the results ---
+    save_state(final_state, f"out/{exp_name}/chatbot_state.json")
+
+    # --- Print the results ---
     print("Assistant reply:", final_state["chat_history"][-1]["content"])
     print("Final persona:", final_state["persona"])
-    save_state(final_state, "chatbot_state.json")
