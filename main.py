@@ -124,6 +124,7 @@ def chat_agent(state: ChatbotState) -> Command[Literal["persona_agent"]]:
     response = agent_chat(
         persona=state["persona"],
         user_msg=user_msg,
+        chat_history=state["chat_history"],  # TODO: add chat history to the prompt
         retrieved_context="",  # TODO: add retrieval
     )
     state["chat_history"].append(

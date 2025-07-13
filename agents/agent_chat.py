@@ -15,7 +15,11 @@ class AgentChat(OpenAIClientRunner):
         super().__init__(model=model_name)
 
     def gen_prompt_update_persona(
-        self, persona: PersonaState, user_msg: str, retrieved_context: str
+        self,
+        persona: PersonaState,
+        user_msg: str,
+        chat_history: str,
+        retrieved_context: str,
     ):
         path_prompt = os.path.join(self.path_prompts, "chat_instructions.txt")
         assert os.path.exists(path_prompt)
@@ -32,6 +36,7 @@ class AgentChat(OpenAIClientRunner):
         user_prompt = user_instructions
         user_prompt += f"Full Persona: {persona}\n"
         user_prompt += f"Relevant Persona (focus): {persona_brief}\n"
+        user_prompt += f"Previous chat history: {chat_history}\n"
         user_prompt += f"User Query: {user_msg}\n"
         user_prompt += f"Context from retrieval (if any):\n{retrieved_context}"
 
@@ -50,7 +55,7 @@ class AgentChat(OpenAIClientRunner):
 
     def __call__(self, *args, **kwargs):
         messages = self.gen_prompt_update_persona(*args, **kwargs)
-        response = self._call_gpt_retry(messages, max_tokens=1024)
+        response = self._call_gpt_retry(messages, max_tokens=None)
         return response
 
 
