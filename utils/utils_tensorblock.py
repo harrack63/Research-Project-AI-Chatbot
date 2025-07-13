@@ -129,7 +129,9 @@ class TensorblockClientRunner:
             base_url="https://api.forge.tensorblock.co/v1",
             api_key=os.getenv("FORGE_KEY"),
         )
-        print(f"{self.__class__.__name__}: Using model: {self.model}")
+        print(
+            f"{self.__class__.__name__}: TensorblockClientRunner: Using model: {self.model}"
+        )
 
     def call_gpt_response(self, prompt, max_tokens: int = 1024):
         response = self.client.responses.create(

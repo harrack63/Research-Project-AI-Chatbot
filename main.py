@@ -18,8 +18,8 @@ from state_persona import PersonaState
 from agents import AgentUpdatePersona, AgentChat
 
 
-dotenv.load_dotenv()
-os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
+# dotenv.load_dotenv()
+# os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
 DEBUG = False
 IDX_DEBUG = 0
@@ -52,9 +52,10 @@ def load_state(filepath: str) -> ChatbotState:
 
 
 # --- Initialize LLM and retrieval components ---
-# llm = ChatOpenAI(model_name="gpt-4", temperature=0)
-agent_update_persona = AgentUpdatePersona(model_name="OpenAI/gpt-4.1-nano")
-agent_chat = AgentChat(model_name="OpenAI/gpt-4.1-nano")
+# llm_model_name = "OpenAI/gpt-4.1-nano"
+llm_model_name = "gpt-4o-mini"
+agent_update_persona = AgentUpdatePersona(model_name=llm_model_name)
+agent_chat = AgentChat(model_name=llm_model_name)
 # embeddings = SentenceTransformerEmbeddings("all-MiniLM-L6-v2")
 # vector_store = FAISS.load_local("healthcare_faiss")
 

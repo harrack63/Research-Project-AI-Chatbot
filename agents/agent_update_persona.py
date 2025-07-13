@@ -1,10 +1,10 @@
 import os
 
-from utils import TensorblockClientRunner
+from utils import TensorblockClientRunner, OpenAIClientRunner
 from state_persona import PersonaState
 
 
-class AgentUpdatePersona(TensorblockClientRunner):
+class AgentUpdatePersona(OpenAIClientRunner):
     def __init__(self, model_name: str = "OpenAI/gpt-4.1-nano"):
         self.path_prompts = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
