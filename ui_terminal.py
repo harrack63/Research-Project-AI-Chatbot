@@ -11,12 +11,6 @@ from rich.text import Text
 from personalized_chatbot import PersonalizedChatbot
 
 
-def load_chat_history(json_path):
-    with open(json_path, "r") as f:
-        data = json.load(f)
-    return data.get("chat_history", [])
-
-
 def display_last_two_turns(chat_history):
     console = Console()
 
@@ -66,14 +60,12 @@ def terminal_ui_plain(exp_name: str, chatbot: PersonalizedChatbot):
         print(final_state["chat_history"][-1]["content"])
 
 
-def terminal_ui(exp_name: str, chatbot: PersonalizedChatbot):
+def terminal_ui(chatbot: PersonalizedChatbot):
     from rich.console import Console
     from rich.panel import Panel
     from rich.text import Text
 
     console = Console()
-    out_dir = f"out/{exp_name}"
-    os.makedirs(out_dir, exist_ok=True)
 
     console.print(
         "[bold magenta]\nType your message below. Type 'exit' or Ctrl+C to quit.\n[/bold magenta]"
@@ -84,13 +76,12 @@ def terminal_ui(exp_name: str, chatbot: PersonalizedChatbot):
             if user_msg.strip().lower() in {"exit", "quit"}:
                 console.print("[yellow]Goodbye![/yellow]")
                 break
-            state = chatbot.chat(exp_name, user_msg)
+
             # Show 'Assistant thinking...' and clear it after invoke
             with console.status(
                 "[bold green]Assistant thinking...[/bold green]", spinner="dots"
             ):
-                final_state = chatbot.graph_agent.invoke(state)
-            chatbot.save_state(final_state, f"{out_dir}/chatbot_state.json")
+                final_state = chatbot.chat(user_msg)
             assistant_reply = final_state["chat_history"][-1]["content"]
             # Print panels for user and assistant turns
             console.print(
@@ -116,7 +107,7 @@ def terminal_ui(exp_name: str, chatbot: PersonalizedChatbot):
             console.print(f"[red]Error:[/red] {e}")
 
 
-if __name__ == "__main__":
+def parse_my_args():
     parser = ArgumentParser()
     parser.add_argument(
         "--exp_name",
@@ -131,7 +122,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Create a new chat session. By default, the script will load an exising chat.",
     )
-    args = parser.parse_args()
+
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = parse_my_args()
+
     if args.exp_name is None:
         # ## randonly generate an interesting experiment name
         args.exp_name = "".join(
@@ -141,8 +138,6 @@ if __name__ == "__main__":
             f"No experiment name provided. Using random name: {args.exp_name}. Please remember this experiment name to resume the chat later."
         )
 
-    os.makedirs(f"out/{args.exp_name}", exist_ok=True)
-
     if args.create_new_chat:
         if os.path.exists(f"out/{args.exp_name}/chatbot_state.json"):
             print(
@@ -150,8 +145,10 @@ if __name__ == "__main__":
             )
             exit(1)
 
-    if os.path.exists(f"out/{args.exp_name}/chatbot_state.json"):
-        history = load_chat_history(f"out/{args.exp_name}/chatbot_state.json")
-        display_last_two_turns(history)
     chatbot = PersonalizedChatbot(exp_name=args.exp_name)
-    terminal_ui(args.exp_name, chatbot)
+    try:
+        display_last_two_turns(chatbot.state["chat_history"])
+    except Exception:
+        print(f"No chat history found for {args.exp_name}. Starting a new chat.")
+
+    terminal_ui(chatbot)
