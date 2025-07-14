@@ -11,7 +11,12 @@ from rich.text import Text
 from personalized_chatbot import PersonalizedChatbot
 
 
-def display_last_two_turns(chat_history):
+def display_chat_history(fp_state, num_turns=2):
+    with open(fp_state, "r") as f:
+        state = json.load(f)
+
+    chat_history = state["chat_history"]
+
     console = Console()
 
     # Group into pairs (user followed by assistant)
@@ -27,11 +32,15 @@ def display_last_two_turns(chat_history):
         else:
             i += 1  # skip malformed or incomplete pairs
 
-    last_two_pairs = paired_turns[-2:] if len(paired_turns) >= 2 else paired_turns
+    desired_turns = (
+        paired_turns[-num_turns:] if len(paired_turns) >= num_turns else paired_turns
+    )
 
-    console.print("\n[bold underline cyan]Last Two Chat Turns[/bold underline cyan]\n")
+    console.print(
+        f"\n[bold underline cyan]Last {num_turns} Chat Turns[/bold underline cyan]\n"
+    )
 
-    for idx, (user_msg, assistant_msg) in enumerate(last_two_pairs):
+    for idx, (user_msg, assistant_msg) in enumerate(desired_turns):
         console.print(
             Panel(
                 # Text(user_msg["content"], style="bold white"),
@@ -52,12 +61,10 @@ def display_last_two_turns(chat_history):
 
 def terminal_ui_plain(exp_name: str, chatbot: PersonalizedChatbot):
     while True:
-        user_msg = input("User: ")
-        state = chatbot.chat(exp_name, user_msg)
-        final_state = chatbot.graph_agent.invoke(state)
-        chatbot.save_state(final_state, f"out/{exp_name}/chatbot_state.json")
+        user_msg = input("User:\n")
+        final_state = chatbot.chat(user_msg)
         print("Assistant:")
-        print(final_state["chat_history"][-1]["content"])
+        print(final_state["assistant_msg"])
 
 
 def terminal_ui(chatbot: PersonalizedChatbot):
@@ -82,7 +89,7 @@ def terminal_ui(chatbot: PersonalizedChatbot):
                 "[bold green]Assistant thinking...[/bold green]", spinner="dots"
             ):
                 final_state = chatbot.chat(user_msg)
-            assistant_reply = final_state["chat_history"][-1]["content"]
+            assistant_reply = final_state["assistant_msg"]
             # Print panels for user and assistant turns
             console.print(
                 Panel(
@@ -122,6 +129,18 @@ def parse_my_args():
         action="store_true",
         help="Create a new chat session. By default, the script will load an exising chat.",
     )
+    parser.add_argument(
+        "--plain",
+        "-p",
+        action="store_true",
+        help="Use plain text terminal UI. By default, the script will use rich terminal UI.",
+    )
+    parser.add_argument(
+        "--debug",
+        "-d",
+        action="store_true",
+        help="Enable debug mode. By default, the script will not enable debug mode.",
+    )
 
     return parser.parse_args()
 
@@ -145,10 +164,13 @@ if __name__ == "__main__":
             )
             exit(1)
 
-    chatbot = PersonalizedChatbot(exp_name=args.exp_name)
+    chatbot = PersonalizedChatbot(exp_name=args.exp_name, debug=args.debug)
     try:
-        display_last_two_turns(chatbot.state["chat_history"])
+        display_chat_history(chatbot.fp_state)
     except Exception:
         print(f"No chat history found for {args.exp_name}. Starting a new chat.")
 
-    terminal_ui(chatbot)
+    if args.plain:
+        terminal_ui_plain(args.exp_name, chatbot)
+    else:
+        terminal_ui(chatbot)
