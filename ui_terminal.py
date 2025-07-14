@@ -1,5 +1,3 @@
-from main import init_graph, chat, save_state
-from langgraph.graph import StateGraph
 from argparse import ArgumentParser
 import os
 import random
@@ -9,6 +7,8 @@ import json
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
+
+from personalized_chatbot import PersonalizedChatbot
 
 
 def load_chat_history(json_path):
@@ -56,17 +56,17 @@ def display_last_two_turns(chat_history):
         )
 
 
-def terminal_ui_plain(exp_name: str, graph_agent: StateGraph):
+def terminal_ui_plain(exp_name: str, chatbot: PersonalizedChatbot):
     while True:
         user_msg = input("User: ")
-        state = chat(exp_name, user_msg)
-        final_state = graph_agent.invoke(state)
-        save_state(final_state, f"out/{exp_name}/chatbot_state.json")
+        state = chatbot.chat(exp_name, user_msg)
+        final_state = chatbot.graph_agent.invoke(state)
+        chatbot.save_state(final_state, f"out/{exp_name}/chatbot_state.json")
         print("Assistant:")
         print(final_state["chat_history"][-1]["content"])
 
 
-def terminal_ui(exp_name: str, graph_agent: StateGraph):
+def terminal_ui(exp_name: str, chatbot: PersonalizedChatbot):
     from rich.console import Console
     from rich.panel import Panel
     from rich.text import Text
@@ -84,13 +84,13 @@ def terminal_ui(exp_name: str, graph_agent: StateGraph):
             if user_msg.strip().lower() in {"exit", "quit"}:
                 console.print("[yellow]Goodbye![/yellow]")
                 break
-            state = chat(exp_name, user_msg)
+            state = chatbot.chat(exp_name, user_msg)
             # Show 'Assistant thinking...' and clear it after invoke
             with console.status(
                 "[bold green]Assistant thinking...[/bold green]", spinner="dots"
             ):
-                final_state = graph_agent.invoke(state)
-            save_state(final_state, f"{out_dir}/chatbot_state.json")
+                final_state = chatbot.graph_agent.invoke(state)
+            chatbot.save_state(final_state, f"{out_dir}/chatbot_state.json")
             assistant_reply = final_state["chat_history"][-1]["content"]
             # Print panels for user and assistant turns
             console.print(
@@ -153,5 +153,5 @@ if __name__ == "__main__":
     if os.path.exists(f"out/{args.exp_name}/chatbot_state.json"):
         history = load_chat_history(f"out/{args.exp_name}/chatbot_state.json")
         display_last_two_turns(history)
-    graph_agent = init_graph()
-    terminal_ui(args.exp_name, graph_agent)
+    chatbot = PersonalizedChatbot(exp_name=args.exp_name)
+    terminal_ui(args.exp_name, chatbot)
