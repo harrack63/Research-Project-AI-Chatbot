@@ -6,10 +6,10 @@ START -> (user_msg) -> chat_agent -> update_persona_agent -> END (response)
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
 
-# from langchain_core.tools import tool
-# from langchain.vectorstores import Chroma
-# from langchain.embeddings import SentenceTransformerEmbeddings
-from typing import TypedDict, Literal, Optional
+from langchain_core.tools import tool
+from langchain_chroma import Chroma
+from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+from typing import TypedDict, Literal
 import json
 import os
 from datetime import datetime
@@ -22,8 +22,10 @@ class ChatbotState(TypedDict):
     """Schema for chatbot state including persona and chat history."""
 
     persona: PersonaState
-    persona_update_status: Literal["pre_chat", "chat_completed"]
+    persona_update_status: Literal["pre_chat", "thinking", "chat_completed"]
     user_msg: str
+    assistant_msg: str
+    assistant_msg_timestamp: str
     chat_history: list  # list[dict], e.g. [{"role": ..., "content": ...}]
 
 
@@ -48,10 +50,12 @@ class PersonalizedChatbot:
         Initialize the personalized chatbot.
 
         Args:
-            model_name: The LLM model to use for agents
-            vector_store_persist_directory: Directory for vector store persistence
+            exp_name: The experiment name for state persistence
+            llm_model_name: The LLM model to use for agents
             debug: Enable debug mode for detailed logging
         """
+        print(f"Initializing {self.__class__.__name__} with exp_name: {exp_name}")
+
         self.debug = debug
         self.debug_counter = 0
         self.exp_name = exp_name
@@ -60,12 +64,12 @@ class PersonalizedChatbot:
         self.agent_update_persona = AgentUpdatePersona(model_name=llm_model_name)
         self.agent_chat = AgentChat(model_name=llm_model_name)
 
+        self.fp_vectordb = f"out/{self.exp_name}/vectordb"
         # Initialize retrieval components
-        # self.embed_func = SentenceTransformerEmbeddings("all-MiniLM-L6-v2")
-        # self.vector_store = Chroma(
-        #     embedding_function=self.embed_func,
-        #     persist_directory=vector_store_persist_directory,
-        # )
+        self.vectordb = Chroma(
+            embedding_function=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"),
+            persist_directory=self.fp_vectordb,
+        )
 
         # Initialize the conversation graph
         self.graph_agent = self._build_graph()
@@ -75,9 +79,9 @@ class PersonalizedChatbot:
             os.makedirs(f"out/{self.exp_name}")
 
         # Load existing state or create new one
-        fp_state = f"out/{self.exp_name}/chatbot_state.json"
-        if os.path.exists(fp_state):
-            self.state = self.load_state(fp_state)
+        self.fp_state = f"out/{self.exp_name}/chatbot_state.json"
+        if os.path.exists(self.fp_state):
+            self.state = self.load_state(self.fp_state)
         else:
             self.state = self.create_initial_state()
 
@@ -86,11 +90,13 @@ class PersonalizedChatbot:
         graph = StateGraph(ChatbotState)
 
         # Add nodes
-        graph.add_node("persona_agent", self._persona_agent)
-        graph.add_node("chat_agent", self._chat_agent)
+        graph.add_node("persona_agent", self._agent_persona)
+        graph.add_node("chat_agent", self._agent_chat)
+        graph.add_node("debug_agent", self._agent_debug)
 
         # Add edges
-        graph.add_edge(START, "persona_agent")
+        graph.add_edge(START, "chat_agent")
+        graph.add_edge("persona_agent", "chat_agent")
 
         return graph.compile()
 
@@ -114,11 +120,11 @@ class PersonalizedChatbot:
         final_state = self.graph_agent.invoke(self.state)
 
         # Save the updated state
-        self.save_state(final_state, f"out/{self.exp_name}/chatbot_state.json")
+        self.save_state(final_state, self.fp_state)
 
         return final_state
 
-    def _persona_agent(self, state: ChatbotState) -> Command[Literal["chat_agent"]]:
+    def _agent_persona(self, state: ChatbotState) -> Command[Literal["chat_agent"]]:
         """
         Agent responsible for updating user persona based on conversation.
 
@@ -130,7 +136,7 @@ class PersonalizedChatbot:
         """
         if self.debug:
             self.debug_counter += 1
-            print(f"=== In persona_agent {self.debug_counter} ===")
+            print(f"=== {self.debug_counter}: In persona_agent ===")
             print(f"persona_update_status: {state['persona_update_status']}")
 
         if state["persona_update_status"] == "pre_chat":
@@ -172,7 +178,7 @@ class PersonalizedChatbot:
                 print("Will go to END")
             # Note: Currently no explicit END transition, but could be added
 
-    def _chat_agent(self, state: ChatbotState) -> Command[Literal["persona_agent"]]:
+    def _agent_chat(self, state: ChatbotState) -> Command[Literal["persona_agent"]]:
         """
         Agent responsible for generating chat responses.
 
@@ -184,54 +190,99 @@ class PersonalizedChatbot:
         """
         if self.debug:
             self.debug_counter += 1
-            print(f"=== In chat_agent {self.debug_counter} ===")
-            print(f"chat_history: {state['chat_history']}")
+            print(f"=== {self.debug_counter}: In chat_agent ===")
 
         user_msg = state["user_msg"]
 
-        # Add user message to chat history
-        state["chat_history"].append(
-            {
-                "role": "user",
-                "content": user_msg,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
+        # Catch all the debug commands from the user
+        if user_msg.lower().strip().startswith("debug"):
+            return Command(goto="debug_agent")
 
-        # Get retrieved context (currently empty, but ready for implementation)
-        retrieved_context = self._get_retrieved_context(user_msg)
+        if self.state["persona_update_status"] == "pre_chat":
+            # Add user message to chat history
+            self.vectordb.add_texts(
+                [user_msg],
+                metadatas=[{"role": "user", "timestamp": datetime.now().isoformat()}],
+            )
+            state["chat_history"].append(
+                {
+                    "role": "user",
+                    "content": user_msg,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            return Command(
+                goto="persona_agent", update={"persona_update_status": "thinking"}
+            )
 
-        # Generate response
-        response = self.agent_chat(
-            persona=state["persona"],
-            user_msg=user_msg,
-            chat_history=state["chat_history"],
-            retrieved_context=retrieved_context,
-        )
+        elif self.state["persona_update_status"] == "thinking":
+            retrieved_context = self.retrieve_context(user_msg)
 
-        # Add assistant response to chat history
-        state["chat_history"].append(
-            {
-                "role": "assistant",
-                "content": response,
-                "timestamp": datetime.now().isoformat(),
-            }
-        )
+            # Generate response
+            response = self.agent_chat(
+                persona=state["persona"],
+                user_msg=user_msg,
+                chat_history=state["chat_history"],
+                retrieved_context=retrieved_context,
+            )
 
-        state["persona_update_status"] = "chat_completed"
+            # Record the response to the chat history and vectordb
+            self.vectordb.add_texts(
+                [response],
+                metadatas=[
+                    {"role": "assistant", "timestamp": datetime.now().isoformat()}
+                ],
+            )
+            state["chat_history"].append(
+                {
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.now().isoformat(),
+                }
+            )
+            return Command(
+                goto="persona_agent",
+                update={
+                    "chat_history": state["chat_history"],
+                    "persona_update_status": "chat_completed",
+                    "assistant_msg": response,
+                    "assistant_msg_timestamp": datetime.now().isoformat(),
+                },
+            )
 
+    def _agent_debug(self, state: ChatbotState) -> Command[Literal["persona_agent"]]:
+        """
+        Agent responsible for debugging the chatbot.
+
+        Args:
+            state: Current chatbot state
+
+        Returns:
+            Command to transition back to persona agent
+        """
         if self.debug:
-            print("Will go to persona_agent")
+            self.debug_counter += 1
+            print(f"=== {self.debug_counter}: In agent_debug ===")
 
-        return Command(
-            goto="persona_agent",
-            update={
-                "chat_history": state["chat_history"],
-                "persona_update_status": state["persona_update_status"],
-            },
-        )
+        user_msg = state["user_msg"]
 
-    def _get_retrieved_context(self, query: str) -> str:
+        if "retrieve" in user_msg:
+            if self.debug:
+                print("Debugging retrieve command")
+            content_to_retrieve = user_msg[user_msg.find("retrieve ") + len("retrieve ") :]
+            docs = self.vectordb.similarity_search(content_to_retrieve, k=5)
+            assistant_msg = f"Content to retrieve: {content_to_retrieve}"
+            assistant_msg += "\n==============\n"
+            for doc in docs:
+                assistant_msg += f"\nRetrieved context timestamp: {doc.metadata['timestamp']}"
+                assistant_msg += f"\nRetrieved context: {doc.page_content}"
+                assistant_msg += "\n==============\n"
+            assistant_msg += "End of retrieved context"
+
+            self.state["assistant_msg"] = assistant_msg
+            self.state["assistant_msg_timestamp"] = datetime.now().isoformat()
+
+    def retrieve_context(self, query: str) -> str:
         """
         Retrieve relevant context from vector store.
 
@@ -242,7 +293,7 @@ class PersonalizedChatbot:
             Retrieved context as string
         """
         try:
-            docs = self.vector_store.similarity_search(query, k=5)
+            docs = self.vectordb.similarity_search(query, k=5)
             return "\n".join(d.page_content for d in docs)
         except Exception as e:
             if self.debug:
@@ -288,7 +339,11 @@ class PersonalizedChatbot:
             Loaded chatbot state
         """
         with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
+            json_data = json.load(f)
+
+        state = PersonalizedChatbot.create_initial_state()
+        state.update(json_data)
+        return state
 
     @staticmethod
     def create_initial_state() -> ChatbotState:
@@ -301,12 +356,37 @@ class PersonalizedChatbot:
         Returns:
             Initial chatbot state
         """
-        return {
-            "persona": PersonaState(),
-            "chat_history": [],
-            "persona_update_status": "pre_chat",
-            "user_msg": "",
-        }
+        return ChatbotState(
+            persona=PersonaState(),
+            persona_update_status="pre_chat",
+            user_msg="",
+            assistant_msg="",
+            assistant_msg_timestamp="",
+            chat_history=[],
+        )
+
+    def display_chat_history_from_vectordb(self):
+        """
+        Display the chat history.
+        """
+        all_data = self.vectordb.get(include=["documents", "metadatas"])
+
+        # Combine documents and metadata and sort by timestamp
+        chat_entries = []
+        for doc, meta in zip(all_data["documents"], all_data["metadatas"]):
+            chat_entries.append(
+                {"timestamp": meta["timestamp"], "role": meta["role"], "content": doc}
+            )
+
+        # Sort by timestamp
+        chat_entries.sort(key=lambda x: x["timestamp"])
+
+        # Print in chronological order
+        for entry in chat_entries:
+            print(f"\nTimestamp: {entry['timestamp']}")
+            print(f"Role: {entry['role']}")
+            print(f"Content: {entry['content']}")
+            print("-" * 80)
 
 
 def main():
