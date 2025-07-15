@@ -211,3 +211,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# RAG dataset
+corpus/dataset
+
+corpus/mayo_clinic_data
