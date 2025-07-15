@@ -95,7 +95,7 @@ class PersonalizedChatbot:
 
         return graph.compile()
 
-    def chat(self, user_msg: str) -> ChatbotState:
+    def chat(self, user_msg: str) -> str:
         """
         Process a chat message and return the updated state.
 
@@ -123,7 +123,7 @@ class PersonalizedChatbot:
         # Save the updated state
         self.save_state(final_state, self.fp_state)
 
-        return final_state
+        return final_state["assistant_msg"]
 
     def _agent_persona(self, state: ChatbotState) -> Command[Literal["chat_agent"]]:
         """

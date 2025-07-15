@@ -2,8 +2,13 @@ from typing import Union, List, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import os
+from dotenv import load_dotenv
+
+from personalized_chatbot import PersonalizedChatbot
 
 from openai import OpenAI
+load_dotenv()
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -46,11 +51,12 @@ def chat_endpoint(req: ChatRequest):
     if not client.api_key:
         raise HTTPException(status_code=500, detail="OpenAI API key not set.")
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": m.role, "content": m.content} for m in history],
-        )
-        reply = response.choices[0].message.content
+        # response = client.chat.completions.create(
+        #     model="gpt-4o",
+        #     messages=[{"role": m.role, "content": m.content} for m in history],
+        # )
+        # reply = response.choices[0].message.content
+        reply = PersonalizedChatbot().chat(req.messages[-1].content)
         history.append(Message(role="assistant", content=reply))
         return {"messages": history}
     except Exception as e:
