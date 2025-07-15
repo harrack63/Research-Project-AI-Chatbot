@@ -78,12 +78,7 @@ class PersonalizedChatbot:
         if not os.path.exists(f"out/{self.exp_name}"):
             os.makedirs(f"out/{self.exp_name}")
 
-        # Load existing state or create new one
         self.fp_state = f"out/{self.exp_name}/chatbot_state.json"
-        if os.path.exists(self.fp_state):
-            self.state = self.load_state(self.fp_state)
-        else:
-            self.state = self.create_initial_state()
 
     def _build_graph(self) -> StateGraph:
         """Build and compile the conversation flow graph."""
@@ -112,12 +107,18 @@ class PersonalizedChatbot:
             Updated chatbot state
         """
 
+        # Load existing state or create new one
+        if os.path.exists(self.fp_state):
+            state = self.load_state(self.fp_state)
+        else:
+            state = self.create_initial_state()
+
         # Update state with new message
-        self.state["user_msg"] = user_msg
-        self.state["persona_update_status"] = "pre_chat"
+        state["user_msg"] = user_msg
+        state["persona_update_status"] = "pre_chat"
 
         # Process through the graph
-        final_state = self.graph_agent.invoke(self.state)
+        final_state = self.graph_agent.invoke(state)
 
         # Save the updated state
         self.save_state(final_state, self.fp_state)
@@ -198,7 +199,7 @@ class PersonalizedChatbot:
         if user_msg.lower().strip().startswith("debug"):
             return Command(goto="debug_agent")
 
-        if self.state["persona_update_status"] == "pre_chat":
+        if state["persona_update_status"] == "pre_chat":
             # Add user message to chat history
             self.vectordb.add_texts(
                 [user_msg],
@@ -215,7 +216,7 @@ class PersonalizedChatbot:
                 goto="persona_agent", update={"persona_update_status": "thinking"}
             )
 
-        elif self.state["persona_update_status"] == "thinking":
+        elif state["persona_update_status"] == "thinking":
             retrieved_context = self.retrieve_context(user_msg)
 
             # Generate response
@@ -269,18 +270,22 @@ class PersonalizedChatbot:
         if "retrieve" in user_msg:
             if self.debug:
                 print("Debugging retrieve command")
-            content_to_retrieve = user_msg[user_msg.find("retrieve ") + len("retrieve ") :]
+            content_to_retrieve = user_msg[
+                user_msg.find("retrieve ") + len("retrieve ") :
+            ]
             docs = self.vectordb.similarity_search(content_to_retrieve, k=5)
             assistant_msg = f"Content to retrieve: {content_to_retrieve}"
             assistant_msg += "\n==============\n"
             for doc in docs:
-                assistant_msg += f"\nRetrieved context timestamp: {doc.metadata['timestamp']}"
+                assistant_msg += (
+                    f"\nRetrieved context timestamp: {doc.metadata['timestamp']}"
+                )
                 assistant_msg += f"\nRetrieved context: {doc.page_content}"
                 assistant_msg += "\n==============\n"
             assistant_msg += "End of retrieved context"
 
-            self.state["assistant_msg"] = assistant_msg
-            self.state["assistant_msg_timestamp"] = datetime.now().isoformat()
+            state["assistant_msg"] = assistant_msg
+            state["assistant_msg_timestamp"] = datetime.now().isoformat()
 
     def retrieve_context(self, query: str) -> str:
         """
