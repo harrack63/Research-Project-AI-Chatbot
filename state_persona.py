@@ -69,3 +69,5 @@ class PersonaState(TypedDict, total=False):
     # 🔹 Healthcare Access & Utilization
     insurance_type: Optional[Literal["none", "government", "medicaid", "private"]]
     has_healthcare_access: Optional[bool]
+
+    goals: Optional[str]
