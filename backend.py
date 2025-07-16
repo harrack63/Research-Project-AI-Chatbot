@@ -51,12 +51,8 @@ def chat_endpoint(req: ChatRequest):
     if not client.api_key:
         raise HTTPException(status_code=500, detail="OpenAI API key not set.")
     try:
-        # response = client.chat.completions.create(
-        #     model="gpt-4o",
-        #     messages=[{"role": m.role, "content": m.content} for m in history],
-        # )
-        # reply = response.choices[0].message.content
-        reply = PersonalizedChatbot().chat(req.messages[-1].content)
+        chatbot = PersonalizedChatbot(exp_name="web_debug")
+        reply = chatbot.chat(req.messages[-1].content)
         history.append(Message(role="assistant", content=reply))
         return {"messages": history}
     except Exception as e:

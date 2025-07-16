@@ -62,9 +62,9 @@ def display_chat_history(fp_state, num_turns=2):
 def terminal_ui_plain(exp_name: str, chatbot: PersonalizedChatbot):
     while True:
         user_msg = input("User:\n")
-        final_state = chatbot.chat(user_msg)
         print("Assistant:")
-        print(final_state["assistant_msg"])
+        print(chatbot.chat(user_msg))
+        print("-" * 80)
 
 
 def terminal_ui(chatbot: PersonalizedChatbot):
@@ -157,16 +157,9 @@ if __name__ == "__main__":
             f"No experiment name provided. Using random name: {args.exp_name}. Please remember this experiment name to resume the chat later."
         )
 
-    if args.create_new_chat:
-        if os.path.exists(f"out/{args.exp_name}/chatbot_state.json"):
-            print(
-                f"Chat session {args.exp_name} already exists. Use --create_new_chat to create a new chat session."
-            )
-            exit(1)
-
     chatbot = PersonalizedChatbot(exp_name=args.exp_name, debug=args.debug)
     try:
-        display_chat_history(chatbot.fp_state)
+        display_chat_history(chatbot.fp_chat_history)
     except Exception:
         print(f"No chat history found for {args.exp_name}. Starting a new chat.")
 
