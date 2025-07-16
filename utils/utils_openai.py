@@ -6,6 +6,7 @@ import os
 import math
 from typing import List
 import time
+import logging
 
 from dotenv import load_dotenv
 import openai
@@ -201,7 +202,8 @@ class OpenAIClientRunner:
     def __init__(self, model="gpt-4.1-nano"):
         self.model = model
         self.client = openai.OpenAI()
-        print(
+        logger = logging.getLogger(__name__)
+        logger.info(
             f"{self.__class__.__name__}: OpenAIClientRunner : Using model: {self.model}"
         )
 
