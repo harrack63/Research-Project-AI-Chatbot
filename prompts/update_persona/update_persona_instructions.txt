@@ -33,6 +33,7 @@ Your tasks are:
    * `occupation` (if stated)
 3. Ignore the chatbot’s replies unless they prompt the patient to reveal personal information.
 4. If any field is not mentioned or cannot be inferred reliably, use `null`.
+5. If both the height and weight are in the persona but the body mass index (BMI) is not, calculate the participant's BMI using the height and weight. The calculation equation is BMI = weight (kg) / height^2 (m^2).
 
 **Rules / Format**:
 - Input JSON and output JSON must be valid.
