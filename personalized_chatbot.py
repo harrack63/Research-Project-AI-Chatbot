@@ -27,6 +27,7 @@ class ChatbotState(TypedDict):
     persona: PersonaState
     persona_update_status: Literal["pre_chat", "thinking", "chat_completed"]
     user_msg: str
+    user_msg_timestamp: str
     assistant_msg: str
     assistant_msg_timestamp: str
 
@@ -159,8 +160,13 @@ class PersonalizedChatbot:
         state = self.load()
 
         # Update state with new message
-        state["user_msg"] = user_msg
-        state["persona_update_status"] = "pre_chat"
+        state.update(
+            {
+                "user_msg": user_msg,
+                "user_msg_timestamp": datetime.now().isoformat(),
+                "persona_update_status": "pre_chat",
+            }
+        )
 
         # Process through the graph
         final_state = self.graph_agent.invoke(state)
@@ -190,7 +196,9 @@ class PersonalizedChatbot:
             self.logger.debug("In _agent_persona: persona_update_status: thinking")
             # Update persona before chat
             user_msg = state["user_msg"]
-            response = self.agent_update_persona(user_msg, state["persona"])
+            persona = state["persona"]
+
+            response = self.agent_update_persona(user_msg, persona)
 
             try:
                 updates = json.loads(response)
@@ -199,11 +207,11 @@ class PersonalizedChatbot:
                 self.logger.warning(f"Error parsing updates: {response}")
 
             # Update persona dict in place
-            state["persona"].update(updates)
+            persona.update(updates)
 
             self.logger.info("Will go to chat_agent")
 
-            return Command(goto="chat_agent", update={"persona": state["persona"]})
+            return Command(goto="chat_agent", update={"persona": persona})
 
         elif state["persona_update_status"] == "chat_completed":
             self.logger.debug(
@@ -216,8 +224,9 @@ class PersonalizedChatbot:
                     for m in self.chat_history_state["chat_history"]
                 ]
             )
+            persona = state["persona"]
             response = self.agent_update_persona(
-                last_conversation_history, state["persona"]
+                last_conversation_history, persona
             )
 
             try:
@@ -227,11 +236,11 @@ class PersonalizedChatbot:
                 self.logger.warning(f"Error parsing updates: {response}")
 
             # Update persona dict in place
-            state["persona"].update(updates)
+            persona.update(updates)
 
             self.logger.info("Will go to END")
 
-            return Command(goto=END)
+            return Command(goto=END, update={"persona": persona})
 
         else:
             self.logger.error(
@@ -253,14 +262,12 @@ class PersonalizedChatbot:
         self.logger.info(f"=== {self.debug_counter}: In chat_agent ===")
 
         user_msg = state["user_msg"]
-        user_msg_timestamp = datetime.now().isoformat()
-        state["persona_update_status"] = "thinking"
         self.logger.debug("Cancel the persona update prior to chat.")
 
         # Catch all the debug commands from the user
         if user_msg.lower().strip().startswith("debug"):
             self.logger.info("User issued a debug command. Switching to debug_agent.")
-            return Command(goto="debug_agent")
+            return Command(goto="debug_agent", update={"persona_update_status": "chat_completed"})
 
         if state["persona_update_status"] == "pre_chat":
             return Command(
@@ -282,7 +289,7 @@ class PersonalizedChatbot:
             self._update_chat_history(
                 role="user",
                 content=user_msg,
-                timestamp=user_msg_timestamp,
+                timestamp=state["user_msg_timestamp"],
             )
             self._update_chat_history(
                 role="assistant",
@@ -335,8 +342,29 @@ class PersonalizedChatbot:
                 assistant_msg += "\n==============\n"
             assistant_msg += "End of retrieved context"
 
-            state["assistant_msg"] = assistant_msg
-            state["assistant_msg_timestamp"] = datetime.now().isoformat()
+            return Command(
+                goto=END,
+                update={
+                    "assistant_msg": assistant_msg,
+                    "assistant_msg_timestamp": datetime.now().isoformat(),
+                },
+            )
+        elif "ping" in user_msg:
+            self.logger.info("Debugging ping command")
+            assistant_msg = (
+                "Assistant is alive. Response time: "
+                f"{(datetime.now() - datetime.fromisoformat(state['user_msg_timestamp'])).total_seconds():.2f} seconds"
+            )
+            assistant_msg_timestamp = datetime.now().isoformat()
+            return Command(
+                goto=END,
+                update={
+                    "assistant_msg": assistant_msg,
+                    "assistant_msg_timestamp": assistant_msg_timestamp,
+                },
+            )
+        else:
+            self.logger.error("Debug command not found")
 
     @log_execution_time
     def _update_chat_history(self, role: str, content: str, timestamp: str) -> None:
@@ -533,11 +561,11 @@ def main():
         "Do you think it is due to your previous health suggestions?"
     )
 
-    final_state = chatbot.chat(user_message)
+    assistant_reply = chatbot.chat(user_message)
 
     # Print results
-    print("Assistant reply:", final_state["assistant_msg"])
-    print("Final persona:", final_state["persona"])
+    print("Assistant reply:", assistant_reply)
+    # print("Final persona:", chatbot.state["persona"])
 
 
 if __name__ == "__main__":
