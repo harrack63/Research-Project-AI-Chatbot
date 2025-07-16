@@ -14,6 +14,8 @@ import json
 import os
 from datetime import datetime
 import logging
+import functools
+import time
 
 from state_persona import PersonaState
 from agents import AgentUpdatePersona, AgentChat
@@ -43,6 +45,24 @@ class ChatHistoryState(TypedDict):
     chat_history: list[ChatHistoryEntry]
 
 
+def log_execution_time(func):
+    @functools.wraps(func)
+    def wrapper(self, *args, **kwargs):
+        start_time = time.time()
+        result = func(self, *args, **kwargs)
+        end_time = time.time()
+        duration = end_time - start_time
+        if hasattr(self, "logger"):
+            self.logger.info(f"{func.__name__} executed in {duration:.4f} seconds")
+        else:
+            print(
+                f"{func.__name__} executed in {duration:.4f} seconds (no logger found)"
+            )
+        return result
+
+    return wrapper
+
+
 class PersonalizedChatbot:
     """
     A personalized chatbot that maintains user persona and provides contextual responses.
@@ -68,7 +88,7 @@ class PersonalizedChatbot:
             llm_model_name: The LLM model to use for agents
             debug: Enable debug mode for detailed logging
         """
-        start_time = datetime.now().isoformat()
+        start_time = datetime.now()
         self.debug = debug
         self.debug_counter = 0
         self.exp_name = exp_name
@@ -100,7 +120,7 @@ class PersonalizedChatbot:
 
         # Log the initialization
         self.logger.info(
-            f"Initialized {self.__class__.__name__} with exp_name: {exp_name} took {datetime.now().isoformat() - start_time} seconds"
+            f"Initialized {self.__class__.__name__} with exp_name: {exp_name} took {(datetime.now() - start_time).total_seconds()} seconds"
         )
 
     def _build_graph(self) -> StateGraph:
@@ -117,10 +137,10 @@ class PersonalizedChatbot:
 
         # Add edges
         graph.add_edge(START, "chat_agent")
-        graph.add_edge("persona_agent", "chat_agent")
 
         return graph.compile()
 
+    @log_execution_time
     def chat(self, user_msg: str) -> str:
         """
         Process a chat message and return the updated state.
@@ -145,13 +165,14 @@ class PersonalizedChatbot:
         # Process through the graph
         final_state = self.graph_agent.invoke(state)
         self.logger.info("Graph processing complete.")
-        
+
         # Save the updated state
         self.save(final_state)
         self.logger.debug(f"Final state: {final_state}")
 
         return final_state["assistant_msg"]
 
+    @log_execution_time
     def _agent_persona(self, state: ChatbotState) -> Command[Literal["chat_agent"]]:
         """
         Agent responsible for updating user persona based on conversation.
@@ -163,10 +184,10 @@ class PersonalizedChatbot:
             Command to transition to chat agent or end
         """
         self.debug_counter += 1
-        self.logger.info(f"=== {self.debug_counter}: In persona_agent ===")
-        self.logger.debug(f"persona_update_status: {state['persona_update_status']}")
+        self.logger.info(f"=== {self.debug_counter}: In _agent_persona ===")
 
-        if state["persona_update_status"] == "pre_chat":
+        if state["persona_update_status"] == "thinking":
+            self.logger.debug("In _agent_persona: persona_update_status: thinking")
             # Update persona before chat
             user_msg = state["user_msg"]
             response = self.agent_update_persona(user_msg, state["persona"])
@@ -185,6 +206,9 @@ class PersonalizedChatbot:
             return Command(goto="chat_agent", update={"persona": state["persona"]})
 
         elif state["persona_update_status"] == "chat_completed":
+            self.logger.debug(
+                "In _agent_persona: persona_update_status: chat_completed"
+            )
             # Update persona after chat completion
             last_conversation_history = "\n".join(
                 [
@@ -207,8 +231,14 @@ class PersonalizedChatbot:
 
             self.logger.info("Will go to END")
 
-            # Note: Currently no explicit END transition, but could be added
+            return Command(goto=END)
 
+        else:
+            self.logger.error(
+                "In _agent_persona: persona_update_status is not pre_chat or chat_completed"
+            )
+
+    @log_execution_time
     def _agent_chat(self, state: ChatbotState) -> Command[Literal["persona_agent"]]:
         """
         Agent responsible for generating chat responses.
@@ -223,6 +253,9 @@ class PersonalizedChatbot:
         self.logger.info(f"=== {self.debug_counter}: In chat_agent ===")
 
         user_msg = state["user_msg"]
+        user_msg_timestamp = datetime.now().isoformat()
+        state["persona_update_status"] = "thinking"
+        self.logger.debug("Cancel the persona update prior to chat.")
 
         # Catch all the debug commands from the user
         if user_msg.lower().strip().startswith("debug"):
@@ -230,22 +263,12 @@ class PersonalizedChatbot:
             return Command(goto="debug_agent")
 
         if state["persona_update_status"] == "pre_chat":
-            self._update_chat_history(
-                role="user", content=user_msg, timestamp=datetime.now().isoformat()
-            )
-
-            self.logger.info(
-                "Added user message to chat history and vectordb. Going to persona_agent."
-            )
-
             return Command(
                 goto="persona_agent", update={"persona_update_status": "thinking"}
             )
 
         elif state["persona_update_status"] == "thinking":
             retrieved_context = self.retrieve_context(user_msg)
-            self.logger.info("Chat history retrieval complated.")
-            self.logger.debug(f"Retrieved context: {retrieved_context}")
 
             # Generate response
             response = self.agent_chat(
@@ -257,10 +280,17 @@ class PersonalizedChatbot:
 
             # Record the response to the chat history and vectordb
             self._update_chat_history(
-                role="assistant", content=response, timestamp=datetime.now().isoformat()
+                role="user",
+                content=user_msg,
+                timestamp=user_msg_timestamp,
+            )
+            self._update_chat_history(
+                role="assistant",
+                content=response,
+                timestamp=datetime.now().isoformat(),
             )
             self.logger.info(
-                "Added assistant response to chat history and vectordb. Going to persona_agent."
+                "Added user message and assistant response to chat history and vectordb. Going to persona_agent."
             )
 
             return Command(
@@ -272,6 +302,7 @@ class PersonalizedChatbot:
                 },
             )
 
+    @log_execution_time
     def _agent_debug(self, state: ChatbotState) -> Command[Literal["persona_agent"]]:
         """
         Agent responsible for debugging the chatbot.
@@ -307,6 +338,7 @@ class PersonalizedChatbot:
             state["assistant_msg"] = assistant_msg
             state["assistant_msg_timestamp"] = datetime.now().isoformat()
 
+    @log_execution_time
     def _update_chat_history(self, role: str, content: str, timestamp: str) -> None:
         """
         Update the chat history.
@@ -323,6 +355,7 @@ class PersonalizedChatbot:
             [content], metadatas=[{"role": role, "timestamp": timestamp}]
         )
 
+    @log_execution_time
     def retrieve_context(self, query: str) -> str:
         """
         Retrieve relevant context from vector store.
@@ -336,35 +369,40 @@ class PersonalizedChatbot:
         try:
             docs = self.vectordb.similarity_search(query, k=5)
             context = "\n".join(d.page_content for d in docs)
-            self.logger.debug(f"Retrieved context for query '{query}': {context}")
+            self.logger.debug(
+                f"Retrieved context for:\nquery:\n{query}\nretrieved context:\n{context}"
+            )
             return context
         except Exception as e:
             self.logger.warning(f"Error in retrieval: {e}")
             return ""
 
+    @log_execution_time
     def save(self, state: ChatbotState | ChatHistoryState) -> None:
         """
         Save the chatbot state and chat history to files.
         """
         self._save_state_to_file(state, self.fp_state)
         self._save_state_to_file(self.chat_history_state, self.fp_chat_history)
-        self.logger.info(f"Saved state to {self.fp_state} and chat history to {self.fp_chat_history}")
+        self.logger.info(
+            f"Saved state to {self.fp_state} and chat history to {self.fp_chat_history}"
+        )
 
+    @log_execution_time
     def load(self) -> ChatbotState:
         """
         Load the chatbot state and chat history from files.
         """
         if not os.path.exists(self.fp_state):
             state = self.create_initial_state()
+            self.logger.info(f"Created new state file at {self.fp_state}")
         else:
             state = self._load_state_from_file(self.fp_state)
-        self.logger.info(f"Loaded state from {self.fp_state}")
+            self.logger.info(f"Loaded state from {self.fp_state}")
 
         if not os.path.exists(self.fp_chat_history):
             self.chat_history_state = ChatHistoryState(chat_history=[])
-            self.logger.info(
-                f"Created new chat history file at {self.fp_chat_history}"
-            )
+            self.logger.info(f"Created new chat history file at {self.fp_chat_history}")
         else:
             with open(self.fp_chat_history, "r", encoding="utf-8") as f:
                 json_data = json.load(f)
@@ -382,23 +420,32 @@ class PersonalizedChatbot:
 
         debug_log_file = os.path.join(workdir, "chatbot_debug.log")
         info_log_file = os.path.join(workdir, "chatbot_info.log")
-        debug_file_handler = logging.FileHandler(debug_log_file, mode="a", encoding="utf-8")
-        info_file_handler = logging.FileHandler(info_log_file, mode="a", encoding="utf-8")
+        debug_file_handler = logging.FileHandler(
+            debug_log_file, mode="a", encoding="utf-8"
+        )
+        info_file_handler = logging.FileHandler(
+            info_log_file, mode="a", encoding="utf-8"
+        )
         formatter = logging.Formatter(
             "[%(asctime)s][%(levelname)s][%(name)s] %(message)s"
         )
         debug_file_handler.setFormatter(formatter)
         info_file_handler.setFormatter(formatter)
+
+        debug_file_handler.setLevel(logging.DEBUG)
+        info_file_handler.setLevel(logging.INFO)
+
         # Remove all handlers before adding (avoid duplicate logs)
         if self.logger.hasHandlers():
             self.logger.handlers.clear()
         self.logger.addHandler(debug_file_handler)
         self.logger.addHandler(info_file_handler)
-        # If you want to keep console logging, uncomment below:
-        # stream_handler = logging.StreamHandler()
-        # stream_handler.setFormatter(formatter)
-        # self.logger.addHandler(stream_handler)
-        
+
+        if self.debug:
+            stream_handler = logging.StreamHandler()
+            stream_handler.setFormatter(formatter)
+            self.logger.addHandler(stream_handler)
+
     @staticmethod
     def _save_state_to_file(
         state: ChatbotState | ChatHistoryState, filepath: str
