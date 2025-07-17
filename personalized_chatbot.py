@@ -77,7 +77,7 @@ class PersonalizedChatbot:
 
     def __init__(
         self,
-        llm_model_name: str = "gpt-4o-mini",
+        llm_model_name: str = "OpenAI/gpt-4.1-nano",
         exp_name: str = "debug",
         debug: bool = False,
     ):
@@ -103,8 +103,12 @@ class PersonalizedChatbot:
         self.init_logger(workdir=self.workdir)
 
         # Initialize agents
-        self.agent_update_persona = AgentUpdatePersona(model_name=llm_model_name)
-        self.agent_chat = AgentChat(model_name=llm_model_name)
+        self.agent_update_persona = AgentUpdatePersona(model=llm_model_name)
+        self.agent_chat = AgentChat(model=llm_model_name)
+        self.logger.info(
+            f"Initialized agent_update_persona with model: {self.agent_update_persona.model}"
+        )
+        self.logger.info(f"Initialized agent_chat with model: {self.agent_chat.model}")
 
         # Initialize vector database for chat history
         self.fp_vectordb = f"{self.workdir}/vectordb"
@@ -225,9 +229,7 @@ class PersonalizedChatbot:
                 ]
             )
             persona = state["persona"]
-            response = self.agent_update_persona(
-                last_conversation_history, persona
-            )
+            response = self.agent_update_persona(last_conversation_history, persona)
 
             try:
                 updates = json.loads(response)
@@ -267,7 +269,9 @@ class PersonalizedChatbot:
         # Catch all the debug commands from the user
         if user_msg.lower().strip().startswith("debug"):
             self.logger.info("User issued a debug command. Switching to debug_agent.")
-            return Command(goto="debug_agent", update={"persona_update_status": "chat_completed"})
+            return Command(
+                goto="debug_agent", update={"persona_update_status": "chat_completed"}
+            )
 
         if state["persona_update_status"] == "pre_chat":
             return Command(
@@ -553,7 +557,9 @@ class PersonalizedChatbot:
 def main():
     """Main function to demonstrate the chatbot usage."""
     # Initialize the chatbot
-    chatbot = PersonalizedChatbot(exp_name="debug", debug=True)
+    chatbot = PersonalizedChatbot(
+        exp_name="debug", llm_model_name="Gemini/models/gemini-2.0-flash", debug=True
+    )
 
     # Run the experiment
     user_message = (

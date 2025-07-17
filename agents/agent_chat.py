@@ -4,15 +4,15 @@ from utils import TensorblockClientRunner, OpenAIClientRunner
 from state_persona import PersonaState
 
 
-class AgentChat(OpenAIClientRunner):
-    def __init__(self, model_name: str = "OpenAI/gpt-4.1-nano"):
+class AgentChat(TensorblockClientRunner):
+    def __init__(self, model: str = "OpenAI/gpt-4.1-nano"):
         self.path_prompts = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "..",
             "prompts",
             "chat",
         )
-        super().__init__(model=model_name)
+        super().__init__(model=model)
 
     def gen_prompt_update_persona(
         self,
