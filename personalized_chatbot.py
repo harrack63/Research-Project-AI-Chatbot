@@ -367,6 +367,18 @@ class PersonalizedChatbot:
                     "assistant_msg_timestamp": assistant_msg_timestamp,
                 },
             )
+        elif "history" in user_msg:
+            self.logger.info("Debugging history command")
+            assistant_msg = "History:\n"
+            for entry in self.chat_history_state["chat_history"]:
+                assistant_msg += f"{entry['role']}: \n{entry['content']}\n\n"
+            return Command(
+                goto=END,
+                update={
+                    "assistant_msg": assistant_msg,
+                    "assistant_msg_timestamp": datetime.now().isoformat(),
+                },
+            )
         else:
             self.logger.error("Debug command not found")
 
