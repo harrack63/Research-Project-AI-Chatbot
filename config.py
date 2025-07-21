@@ -1,0 +1,1 @@
+VECTORDB_NAME_CHAT_HISTORY = "vectordb_chat_history"

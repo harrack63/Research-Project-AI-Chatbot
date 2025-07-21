@@ -19,6 +19,7 @@ import time
 
 from state_persona import PersonaState
 from agents import AgentUpdatePersona, AgentChat
+from config import VECTORDB_NAME_CHAT_HISTORY
 
 
 class ChatbotState(TypedDict):
@@ -111,7 +112,7 @@ class PersonalizedChatbot:
         self.logger.info(f"Initialized agent_chat with model: {self.agent_chat.model}")
 
         # Initialize vector database for chat history
-        self.fp_vectordb = f"{self.workdir}/vectordb"
+        self.fp_vectordb = f"{self.workdir}/{VECTORDB_NAME_CHAT_HISTORY}"
         self.vectordb = Chroma(
             embedding_function=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"),
             persist_directory=self.fp_vectordb,
@@ -290,16 +291,19 @@ class PersonalizedChatbot:
             )
 
             # Record the response to the chat history and vectordb
-            self._update_chat_history(
-                role="user",
-                content=user_msg,
-                timestamp=state["user_msg_timestamp"],
-            )
-            self._update_chat_history(
-                role="assistant",
-                content=response,
-                timestamp=datetime.now().isoformat(),
-            )
+            messages = [
+                {
+                    "role": "user",
+                    "content": user_msg,
+                    "timestamp": state["user_msg_timestamp"],
+                },
+                {
+                    "role": "assistant",
+                    "content": response,
+                    "timestamp": datetime.now().isoformat(),
+                },
+            ]
+            self._update_chat_history(messages=messages)
             self.logger.info(
                 "Added user message and assistant response to chat history and vectordb. Going to persona_agent."
             )
@@ -353,7 +357,29 @@ class PersonalizedChatbot:
                     "assistant_msg_timestamp": datetime.now().isoformat(),
                 },
             )
-        elif "ping" in user_msg:
+        elif "history" in user_msg:
+            self.logger.info("Debugging history command")
+            assistant_msg = "History:\n"
+            for entry in self.chat_history_state["chat_history"]:
+                assistant_msg += f"{entry['role']}: \n{entry['content']}\n\n"
+            return Command(
+                goto=END,
+                update={
+                    "assistant_msg": assistant_msg,
+                    "assistant_msg_timestamp": datetime.now().isoformat(),
+                },
+            )
+        elif "debug model" in user_msg:
+            self.logger.info("Debugging print model name")
+            assistant_msg = f"Model name: {self.agent_chat.model}"
+            return Command(
+                goto=END,
+                update={
+                    "assistant_msg": assistant_msg,
+                    "assistant_msg_timestamp": datetime.now().isoformat(),
+                },
+            )
+        else:
             self.logger.info("Debugging ping command")
             assistant_msg = (
                 "Assistant is alive. Response time: "
@@ -367,37 +393,41 @@ class PersonalizedChatbot:
                     "assistant_msg_timestamp": assistant_msg_timestamp,
                 },
             )
-        elif "history" in user_msg:
-            self.logger.info("Debugging history command")
-            assistant_msg = "History:\n"
-            for entry in self.chat_history_state["chat_history"]:
-                assistant_msg += f"{entry['role']}: \n{entry['content']}\n\n"
-            return Command(
-                goto=END,
-                update={
-                    "assistant_msg": assistant_msg,
-                    "assistant_msg_timestamp": datetime.now().isoformat(),
-                },
-            )
-        else:
-            self.logger.error("Debug command not found")
 
     @log_execution_time
-    def _update_chat_history(self, role: str, content: str, timestamp: str) -> None:
+    def _update_chat_history(self, messages: list[dict]) -> None:
         """
         Update the chat history.
         """
-        self.chat_history_state["chat_history"].append(
-            {
-                "role": role,
-                "content": content,
-                "timestamp": timestamp,
-            }
+        for message in messages:
+            self.chat_history_state["chat_history"].append(
+                {
+                    "role": message["role"],
+                    "content": message["content"],
+                    "timestamp": message["timestamp"],
+                }
+            )
+        conversation = "\n".join(
+            [f"{m['role']}: {m['content']}" for m in messages]
+        )
+        self.vectordb.add_texts(
+            [conversation],
+            metadatas=[
+                {"role": "conversation", "timestamp": message["timestamp"]}
+            ],
         )
 
-        self.vectordb.add_texts(
-            [content], metadatas=[{"role": role, "timestamp": timestamp}]
-        )
+        # self.chat_history_state["chat_history"].append(
+        #     {
+        #         "role": role,
+        #         "content": content,
+        #         "timestamp": timestamp,
+        #     }
+        # )
+
+        # self.vectordb.add_texts(
+        #     [content], metadatas=[{"role": role, "timestamp": timestamp}]
+        # )
 
     @log_execution_time
     def retrieve_context(self, query: str) -> str:
@@ -583,7 +613,9 @@ def main():
 
     # Print results
     print("Assistant reply:", assistant_reply)
-    # print("Final persona:", chatbot.state["persona"])
+    # print("Final persona:", chatbot.state["persona"]
+
+    chatbot.display_chat_history_from_vectordb()
 
 
 if __name__ == "__main__":
