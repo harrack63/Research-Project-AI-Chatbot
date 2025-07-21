@@ -2,6 +2,7 @@ import os
 import time
 import random
 import base64
+import logging
 
 from dotenv import load_dotenv
 import openai
@@ -55,7 +56,6 @@ def _resize_and_encode_image(
     with Image.open(image_path).convert("RGB") as img:
         # directly encode the image to base64 without resizing if the image is already smaller than the max_dim
         if img.width <= max_dim and img.height <= max_dim:
-            # print(f"Image {image_path} is already smaller than the max_dim. Skipping resize.")
             return encode_image_to_base64(image_path)
 
         img.thumbnail((max_dim, max_dim), Image.LANCZOS)
@@ -129,7 +129,8 @@ class TensorblockClientRunner:
             base_url="https://api.forge.tensorblock.co/v1",
             api_key=os.getenv("FORGE_KEY"),
         )
-        print(
+        logger = logging.getLogger(__name__)
+        logger.info(
             f"{self.__class__.__name__}: TensorblockClientRunner: Using model: {self.model}"
         )
 

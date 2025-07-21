@@ -4,15 +4,15 @@ from utils import TensorblockClientRunner, OpenAIClientRunner
 from state_persona import PersonaState
 
 
-class AgentUpdatePersona(OpenAIClientRunner):
-    def __init__(self, model_name: str = "OpenAI/gpt-4.1-nano"):
+class AgentUpdatePersona(TensorblockClientRunner):
+    def __init__(self, model: str = "OpenAI/gpt-4.1-nano"):
         self.path_prompts = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "..",
             "prompts",
             "update_persona",
         )
-        super().__init__(model=model_name)
+        super().__init__(model=model)
 
         self.current_persona = {}
 
