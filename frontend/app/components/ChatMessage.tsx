@@ -1,4 +1,5 @@
 import React from "react";
+import ReactMarkdown from "react-markdown";
 
 type ChatMessageProps = {
   role: string;
@@ -16,7 +17,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ role, content }) => {
           " px-4 py-2 max-w-[75%] text-base shadow"
         }
       >
-        {content}
+        <ReactMarkdown>{content}</ReactMarkdown>
       </div>
     </div>
   );
