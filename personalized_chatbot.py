@@ -109,6 +109,7 @@ class PersonalizedChatbot:
 
         # Set up logging to file
         self.init_logger(workdir=self.workdir)
+        self.logger.info("="*10 + f" Initializing {self.__class__.__name__}... " + "="*10)
 
         # Initialize agents
         if FORGE_KEY:
@@ -618,7 +619,10 @@ def main():
     """Main function to demonstrate the chatbot usage."""
     # Initialize the chatbot
     chatbot = PersonalizedChatbot(
-        exp_name="debug", llm_model_name="Gemini/models/gemini-2.0-flash", debug=True
+        exp_name="debug",
+        # llm_model_name="Gemini/models/gemini-2.0-flash",
+        llm_model_name="OpenAI/gpt-4.1-nano",
+        debug=True
     )
 
     # Run the experiment
