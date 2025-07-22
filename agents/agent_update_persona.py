@@ -4,15 +4,27 @@ from utils import TensorblockClientRunner, OpenAIClientRunner
 from state_persona import PersonaState
 
 
-class AgentUpdatePersona(TensorblockClientRunner):
-    def __init__(self, model: str = "OpenAI/gpt-4.1-nano"):
+class AgentUpdatePersona:
+    def __init__(
+        self,
+        model: str = "OpenAI/gpt-4.1-nano",
+        llm_runner_name: str = "Tensorblock",
+    ):
+        self.model = model
+        self.llm_runner_name = llm_runner_name
         self.path_prompts = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
             "..",
             "prompts",
             "update_persona",
         )
-        super().__init__(model=model)
+
+        if llm_runner_name == "OpenAI":
+            self.llm_runner = OpenAIClientRunner(model=model)
+        elif llm_runner_name == "Tensorblock":
+            self.llm_runner = TensorblockClientRunner(model=model)
+        else:
+            raise ValueError(f"Invalid LLM runner name: {llm_runner_name}")
 
         self.current_persona = {}
 
@@ -44,7 +56,7 @@ class AgentUpdatePersona(TensorblockClientRunner):
 
     def __call__(self, *args, **kwargs):
         messages = self.gen_prompt_update_persona(*args, **kwargs)
-        response = self._call_gpt_retry(messages, max_tokens=None)
+        response = self.llm_runner(messages, max_tokens=None)
         return response
 
 

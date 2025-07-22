@@ -9,12 +9,6 @@ import openai
 from PIL import Image, ImageOps
 from io import BytesIO
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Set OpenAI API key
-openai.api_key = os.getenv("FORGE_KEY")
-
 
 MINITES = 60
 HOURS = 3600
@@ -162,4 +156,5 @@ class TensorblockClientRunner:
 
 
 if __name__ == "__main__":
-    pass
+    # Load environment variables from .env file
+    load_dotenv()
