@@ -2,11 +2,19 @@
 
 ## Install Instructions (for dev)
 
-### Step 0. Build the `conda` environment using the provided `environment.yaml` file.
+### Step 0. Build the `conda` environment.
 
+#### Method 1. Tested on Ubuntu 22.04
 ```bash
 conda env create -f environment.yaml
 conda activate langgraph
+```
+
+#### Method 2
+
+```bash
+conda create -n chatbot python=3.13
+pip install -r requirements.txt
 ```
 
 ### Step 1. Create a `.env` file in the `utils` folder and create a line and put your `OPENAI_API_KEY` in it.
