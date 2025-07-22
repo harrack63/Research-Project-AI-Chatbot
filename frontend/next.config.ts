@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Correct key for dev CORS
+  allowedDevOrigins: ["http://localhost:3000"],
 };
 
 export default nextConfig;
