@@ -109,7 +109,9 @@ class PersonalizedChatbot:
 
         # Set up logging to file
         self.init_logger(workdir=self.workdir)
-        self.logger.info("="*10 + f" Initializing {self.__class__.__name__}... " + "="*10)
+        self.logger.info(
+            "=" * 10 + f" Initializing {self.__class__.__name__}... " + "=" * 10
+        )
 
         # Initialize agents
         if FORGE_KEY:
@@ -149,9 +151,13 @@ class PersonalizedChatbot:
 
         # Log the initialization
         self.logger.info(
-            f"Initialized {self.__class__.__name__} with exp_name: {exp_name} took {(datetime.now() - start_time).total_seconds()} seconds"
+            f"Initialized {self.__class__.__name__} with exp_name: {exp_name}"
+        )
+        self.logger.info(
+            f"__init__ executed in {(datetime.now() - start_time).total_seconds():.2f} seconds"
         )
 
+    @log_execution_time
     def _build_graph(self) -> StateGraph:
         """Build and compile the conversation flow graph."""
 
@@ -198,7 +204,7 @@ class PersonalizedChatbot:
 
         # Process through the graph
         final_state = self.graph_agent.invoke(state)
-        self.logger.info("Graph processing complete.")
+        self.logger.info("-" * 10 + " Graph processing complete. " + "-" * 10)
 
         # Save the updated state
         self.save(final_state)
@@ -508,7 +514,7 @@ class PersonalizedChatbot:
         return state
 
     def init_logger(self, workdir: str):
-        self.logger = logging.getLogger(self.__class__.__name__)
+        self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG)
 
         debug_log_file = os.path.join(workdir, "chatbot_debug.log")
@@ -520,7 +526,7 @@ class PersonalizedChatbot:
             info_log_file, mode="a", encoding="utf-8"
         )
         formatter = logging.Formatter(
-            "[%(asctime)s][%(levelname)s][%(name)s] %(message)s"
+            "[%(levelname)4.4s][%(asctime)s][%(module)s:%(lineno)d] %(message)s"
         )
         debug_file_handler.setFormatter(formatter)
         info_file_handler.setFormatter(formatter)
@@ -528,9 +534,9 @@ class PersonalizedChatbot:
         debug_file_handler.setLevel(logging.DEBUG)
         info_file_handler.setLevel(logging.INFO)
 
-        # Remove all handlers before adding (avoid duplicate logs)
         if self.logger.hasHandlers():
             self.logger.handlers.clear()
+
         self.logger.addHandler(debug_file_handler)
         self.logger.addHandler(info_file_handler)
 
@@ -622,7 +628,7 @@ def main():
         exp_name="debug",
         # llm_model_name="Gemini/models/gemini-2.0-flash",
         llm_model_name="OpenAI/gpt-4.1-nano",
-        debug=True
+        debug=True,
     )
 
     # Run the experiment
