@@ -17,11 +17,15 @@ conda create -n chatbot python=3.13
 pip install -r requirements.txt
 ```
 
-### Step 1. Create a `.env` file in the `utils` folder and create a line and put your `OPENAI_API_KEY` in it.
+### Step 1. Create a `.env` file in the project **root directory** and put your `OPENAI_API_KEY` or `FORGE_KEY` in it.
 
 ```bash
-vim ./utils.env
+vim .env
 ```
+
+We recommend you to use [Froge by Tensorblock](https://forge.tensorblock.co/) so call large language models, which can switch to different LLMs by simply specifying a different `llm_model_name` when instantiating `PersonalizedChatbot`.
+
+If not, simply put your `OPENAI_API_KEY` in the `.env` file so that the framework will automatically use the OpenAI client.
 
 ### Step 2. In the project home directory, build a terminal UI for the chatbot by running
 

@@ -6,7 +6,6 @@ START -> (user_msg) -> chat_agent -> update_persona_agent -> END (response)
 from langgraph.graph import StateGraph, START, END
 from langgraph.types import Command
 
-from langchain_core.tools import tool
 from langchain_chroma import Chroma
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from typing import TypedDict, Literal
@@ -19,7 +18,15 @@ import time
 
 from state_persona import PersonaState
 from agents import AgentUpdatePersona, AgentChat
-from config import VECTORDB_NAME_CHAT_HISTORY
+from config import VECTORDB_NAME_CHAT_HISTORY, MILVUS_URI
+from utils import MilvusUtil
+
+from dotenv import load_dotenv
+
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") if os.getenv("OPENAI_API_KEY") else None
+FORGE_KEY = os.getenv("FORGE_KEY") if os.getenv("FORGE_KEY") else None
+assert OPENAI_API_KEY or FORGE_KEY, "Either OPENAI_API_KEY or FORGE_KEY must be set"
 
 
 class ChatbotState(TypedDict):
@@ -102,14 +109,27 @@ class PersonalizedChatbot:
 
         # Set up logging to file
         self.init_logger(workdir=self.workdir)
+        self.logger.info("="*10 + f" Initializing {self.__class__.__name__}... " + "="*10)
 
         # Initialize agents
-        self.agent_update_persona = AgentUpdatePersona(model=llm_model_name)
-        self.agent_chat = AgentChat(model=llm_model_name)
-        self.logger.info(
-            f"Initialized agent_update_persona with model: {self.agent_update_persona.model}"
+        if FORGE_KEY:
+            llm_runner_name = "Tensorblock"
+        else:
+            llm_runner_name = "OpenAI"
+            if llm_model_name.startswith("OpenAI/"):
+                llm_model_name = llm_model_name.split("/")[1]
+        self.agent_update_persona = AgentUpdatePersona(
+            model=llm_model_name, llm_runner_name=llm_runner_name
         )
-        self.logger.info(f"Initialized agent_chat with model: {self.agent_chat.model}")
+        self.agent_chat = AgentChat(
+            model=llm_model_name, llm_runner_name=llm_runner_name
+        )
+        self.logger.info(
+            f"Initialized agent_update_persona with model: {self.agent_update_persona.model}; llm_runner: {llm_runner_name}"
+        )
+        self.logger.info(
+            f"Initialized agent_chat with model: {self.agent_chat.model}; llm_runner: {llm_runner_name}"
+        )
 
         # Initialize vector database for chat history
         self.fp_vectordb = f"{self.workdir}/{VECTORDB_NAME_CHAT_HISTORY}"
@@ -118,6 +138,9 @@ class PersonalizedChatbot:
             persist_directory=self.fp_vectordb,
         )
         self.fp_chat_history = f"{self.workdir}/chat_history.json"
+
+        # # Initialize Milvus Database
+        # self.milvus_util = MilvusUtil(uri=MILVUS_URI, token=MILVUS_TOKEN)
 
         # Initialize the conversation graph
         self.graph_agent = self._build_graph()
@@ -407,14 +430,10 @@ class PersonalizedChatbot:
                     "timestamp": message["timestamp"],
                 }
             )
-        conversation = "\n".join(
-            [f"{m['role']}: {m['content']}" for m in messages]
-        )
+        conversation = "\n".join([f"{m['role']}: {m['content']}" for m in messages])
         self.vectordb.add_texts(
             [conversation],
-            metadatas=[
-                {"role": "conversation", "timestamp": message["timestamp"]}
-            ],
+            metadatas=[{"role": "conversation", "timestamp": message["timestamp"]}],
         )
 
         # self.chat_history_state["chat_history"].append(
@@ -600,7 +619,10 @@ def main():
     """Main function to demonstrate the chatbot usage."""
     # Initialize the chatbot
     chatbot = PersonalizedChatbot(
-        exp_name="debug", llm_model_name="Gemini/models/gemini-2.0-flash", debug=True
+        exp_name="debug",
+        # llm_model_name="Gemini/models/gemini-2.0-flash",
+        llm_model_name="OpenAI/gpt-4.1-nano",
+        debug=True
     )
 
     # Run the experiment
