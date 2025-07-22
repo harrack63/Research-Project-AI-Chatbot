@@ -11,28 +11,26 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from tqdm import tqdm
 
 import os
+from dotenv import load_dotenv
 
-os.environ["OPENAI_API_KEY"] = "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"
-
+load_dotenv()
 
 # The `uri` and `token` correspond to the Public Endpoint and Token of your Zilliz Cloud (fully-managed Milvus) cluster.
 milvus_client = MilvusClient(
-    uri="https://in03-260dfcb4a658d19.serverless.gcp-us-west1.cloud.zilliz.com", 
-    token="fd63101c860c8dd08740726b1841aabc88aa93fac2f3c7d4b7bef38771d64f3ea4cbf0c4ed0374ce78aca750ed7a563fed6e638f"
+    uri=os.getenv("MILVUS_URI")
 )
 
 llm = ChatOpenAI(
     model="gpt-4o",
     temperature=0,
+    api_key=os.getenv("OPENAI_API_KEY")
 )
-embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
+embedding_model = OpenAIEmbeddings(
+    model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 
 
-entityid_2_relationids = defaultdict(list)
-relationid_2_passageids = defaultdict(list)
-
-entities = []
-relations = []
 passages = []
 
 with open("dataset/mayo_clinic.json", "r", encoding="utf-8") as f:
@@ -41,21 +39,6 @@ with open("dataset/mayo_clinic.json", "r", encoding="utf-8") as f:
 for passage_id, dataset_info in enumerate(tqdm(dataset)):
     passage, triplets = dataset_info["passage"], dataset_info["triplets"]
     passages.append(passage)
-    for triplet in triplets:
-        if triplet[0] not in entities:
-            entities.append(triplet[0])
-        if triplet[2] not in entities:
-            entities.append(triplet[2])
-        relation = " ".join(triplet)
-        if relation not in relations:
-            relations.append(relation)
-            entityid_2_relationids[entities.index(triplet[0])].append(
-                len(relations) - 1
-            )
-            entityid_2_relationids[entities.index(triplet[2])].append(
-                len(relations) - 1
-            )
-        relationid_2_passageids[relations.index(relation)].append(passage_id)
 
 embedding_dim = len(embedding_model.embed_query("foo"))
 
@@ -80,11 +63,7 @@ def create_milvus_collection(collection_name: str):
     )
 
 
-entity_col_name = "entity_collection"
-relation_col_name = "relation_collection"
-passage_col_name = "passage_collection"
-create_milvus_collection(entity_col_name)
-create_milvus_collection(relation_col_name)
+passage_col_name = "mayo_clinic_passage"
 create_milvus_collection(passage_col_name)
 
 
@@ -121,17 +100,6 @@ def milvus_insert(
             collection_name=collection_name,
             data=batch_data,
         )
-
-
-milvus_insert(
-    collection_name=relation_col_name,
-    text_list=relations,
-)
-
-milvus_insert(
-    collection_name=entity_col_name,
-    text_list=entities,
-)
 
 milvus_insert(
     collection_name=passage_col_name,
