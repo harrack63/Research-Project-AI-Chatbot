@@ -254,10 +254,12 @@ class PersonalizedChatbot:
             # Update persona after chat completion
             last_conversation_history = "\n".join(
                 [
-                    f"{m['role']}: {m['content']}"
-                    for m in self.chat_history_state["chat_history"]
+                    f"User: {state['user_msg']}",
+                    f"Assistant: {state['assistant_msg']}",
                 ]
             )
+
+            self.logger.debug(f"Last conversation history: {last_conversation_history}")
             persona = state["persona"]
             response = self.agent_update_persona(last_conversation_history, persona)
 
@@ -295,6 +297,8 @@ class PersonalizedChatbot:
 
         user_msg = state["user_msg"]
         self.logger.debug("Cancel the persona update prior to chat.")
+        persona_update_status = state["persona_update_status"]
+        persona_update_status = "thinking"
 
         # Catch all the debug commands from the user
         if user_msg.lower().strip().startswith("debug"):
@@ -303,12 +307,13 @@ class PersonalizedChatbot:
                 goto="debug_agent", update={"persona_update_status": "chat_completed"}
             )
 
-        if state["persona_update_status"] == "pre_chat":
-            return Command(
-                goto="persona_agent", update={"persona_update_status": "thinking"}
-            )
+        if persona_update_status == "pre_chat":
+            raise ValueError("Persona update status is pre_chat. This should not happen.")
+            # return Command(
+            #     goto="persona_agent", update={"persona_update_status": "thinking"}
+            # )
 
-        elif state["persona_update_status"] == "thinking":
+        elif persona_update_status == "thinking":
             retrieved_context = self.retrieve_context(user_msg)
 
             # Generate response

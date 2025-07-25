@@ -24,13 +24,15 @@ export default function Home() {
     setInput("");
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/chat", {
+      console.log("Sending message to backend");
+      const res = await fetch("http://44.211.226.67:3009/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ messages: newMessages }),
       });
+      console.log("Response from backend", res);
       if (!res.ok) throw new Error("Backend error");
       const data = await res.json();
       const updatedMessages = data.messages || [];
