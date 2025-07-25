@@ -308,7 +308,9 @@ class PersonalizedChatbot:
             )
 
         if persona_update_status == "pre_chat":
-            raise ValueError("Persona update status is pre_chat. This should not happen.")
+            raise ValueError(
+                "Persona update status is pre_chat. This should not happen."
+            )
             # return Command(
             #     goto="persona_agent", update={"persona_update_status": "thinking"}
             # )
@@ -393,9 +395,13 @@ class PersonalizedChatbot:
             )
         elif "history" in user_msg:
             self.logger.info("Debugging history command")
-            assistant_msg = "History:\n"
+            assistant_msg = "History:\n\n"
             for entry in self.chat_history_state["chat_history"]:
-                assistant_msg += f"{entry['role']}: \n{entry['content']}\n\n"
+                assistant_msg += f"{entry['role']}: \n\n{entry['content']}\n\n"
+                if entry["role"] == "user":
+                    assistant_msg += "-" * 80 + "\n\n"
+                else:
+                    assistant_msg += "=" * 80 + "\n\n"
             return Command(
                 goto=END,
                 update={
