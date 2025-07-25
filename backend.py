@@ -6,6 +6,14 @@ from personalized_chatbot import PersonalizedChatbot
 
 from fastapi.middleware.cors import CORSMiddleware
 
+import logging
+from config import LOGGING_CONFIG
+import time
+
+logging.config.dictConfig(LOGGING_CONFIG)
+logger = logging.getLogger(__name__)
+logger.info("Initializing backend")
+
 app = FastAPI()
 
 app.add_middleware(
@@ -44,6 +52,9 @@ def read_item(item_id: int, q: Union[str, None] = None):
 def chat_endpoint(req: ChatRequest):
     # Start with a default assistant greeting if this is a new conversation
     history = req.messages
+
+    logger.info("Received messages from frontend")
+    start_time = time.time()
     if not history or history[0].role != "assistant":
         history = [
             Message(role="assistant", content="Hi! How can I help you today?")
@@ -55,9 +66,14 @@ def chat_endpoint(req: ChatRequest):
         )
         reply = chatbot.chat(req.messages[-1].content)
         history.append(Message(role="assistant", content=reply))
+
+        logger.info(
+            f"Chatbot returned in {time.time() - start_time:.2f} seconds. Sending response to frontend."
+        )
         return {"messages": history}
     except Exception as e:
-        print(f"Error in /chat: {e}")
         history.append(Message(role="assistant", content=f"Error: {e}"))
+
+        logger.error(f"Sending error response to frontend: {e}")
+        # raise HTTPException(status_code=500, detail=str(e))
         return {"messages": history}
-        raise HTTPException(status_code=500, detail=str(e))
