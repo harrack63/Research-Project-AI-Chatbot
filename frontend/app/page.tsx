@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import ChatList from "./components/ChatList";
 import ChatInput from "./components/ChatInput";
+import { handleSendMessage } from "./utils";
 
 export default function Home() {
   const [messages, setMessages] = useState([
@@ -18,35 +19,9 @@ export default function Home() {
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
-    const newMessages = [...messages, { role: "user", content: input }];
-    setMessages(newMessages);
-    setInput("");
-    setLoading(true);
-    try {
-      console.log("Sending message to backend");
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-      const res = await fetch(`${backendUrl}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ messages: newMessages }),
-      });
-      console.log("Response from backend", res);
-      if (!res.ok) throw new Error("Backend error");
-      const data = await res.json();
-      const updatedMessages = data.messages || [];
-      setMessages(updatedMessages);
-    } catch (err) {
-      setMessages([
-        ...messages,
-        { role: "user", content: input },
-        { role: "assistant", content: "Sorry, there was an error." },
-      ]);
-    } finally {
-      setLoading(false);
-    }
+    const currentInput = input; // Store the current input
+    setInput(""); // Clear input immediately
+    await handleSendMessage(messages, currentInput, setMessages, setLoading);
   }
 
   return (
