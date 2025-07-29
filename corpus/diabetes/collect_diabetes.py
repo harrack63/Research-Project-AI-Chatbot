@@ -235,57 +235,89 @@ class DiabetesRecipeScraper:
     
     def save_recipes_to_json(self, recipes: List[Dict], filename: str = 'diabetes_recipes.json'):
         """Save scraped recipes to JSON file"""
-        filepath = os.path.join(os.path.dirname(__file__), filename)
+        filepath = os.path.join(os.path.dirname(__file__), '..', 'dataset', filename)
         
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(recipes, f, indent=2, ensure_ascii=False)
         
         logger.info(f"Saved {len(recipes)} recipes to {filepath}")
     
-    def scrape_all_recipes(self, max_pages: Optional[int] = None, max_recipes: Optional[int] = None):
+    def load_existing_recipes(self, filename: str = 'diabetes_recipes.json') -> List[Dict]:
+        """Load existing recipes from JSON file"""
+        filepath = os.path.join(os.path.dirname(__file__), '..', 'dataset', filename)
+        
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    recipes = json.load(f)
+                logger.info(f"Loaded {len(recipes)} existing recipes from {filepath}")
+                return recipes
+            except Exception as e:
+                logger.error(f"Error loading existing recipes: {e}")
+                return []
+        else:
+            logger.info("No existing recipes file found, starting fresh")
+            return []
+    
+    def get_existing_urls(self, recipes: List[Dict]) -> set:
+        """Extract URLs from existing recipes"""
+        return {recipe.get('url') for recipe in recipes if recipe.get('url')}
+    
+    def scrape_all_recipes(self, max_pages: Optional[int] = None, max_recipes: Optional[int] = None, continue_from_existing: bool = True):
         """Main method to scrape all recipes"""
         logger.info("Starting diabetes recipe scraping...")
+        
+        # Load existing recipes if continuing
+        existing_recipes = []
+        existing_urls = set()
+        if continue_from_existing:
+            existing_recipes = self.load_existing_recipes()
+            existing_urls = self.get_existing_urls(existing_recipes)
+            logger.info(f"Found {len(existing_urls)} existing recipe URLs, will skip these")
         
         # Get all recipe URLs
         recipe_urls = self.get_all_recipe_urls(max_pages=max_pages)
         
-        if max_recipes:
-            recipe_urls = recipe_urls[:max_recipes]
+        # Filter out already scraped URLs
+        new_urls = [url for url in recipe_urls if url not in existing_urls]
+        logger.info(f"Found {len(new_urls)} new URLs to scrape")
         
-        # Scrape each recipe
-        recipes = []
-        for i, url in enumerate(recipe_urls, 1):
-            logger.info(f"Processing recipe {i}/{len(recipe_urls)}")
+        if max_recipes:
+            new_urls = new_urls[:max_recipes]
+        
+        # Start with existing recipes
+        recipes = existing_recipes.copy()
+        
+        # Scrape each new recipe
+        for i, url in enumerate(new_urls, 1):
+            logger.info(f"Processing new recipe {i}/{len(new_urls)} (Total: {len(recipes) + 1})")
             
             recipe_data = self.scrape_recipe_details(url)
             if recipe_data:
                 recipes.append(recipe_data)
+                # Save after each recipe to avoid losing progress
+                self.save_recipes_to_json(recipes)
+                logger.info(f"Saved recipe #{len(recipes)}: {recipe_data.get('name', 'Unknown')}")
             
             # Rate limiting
             time.sleep(2)
-            
-            # Save periodically
-            if i % 50 == 0:
-                self.save_recipes_to_json(recipes, f'diabetes_recipes_partial_{i}.json')
         
-        # Save final results
-        self.save_recipes_to_json(recipes)
-        logger.info(f"Scraping completed! Total recipes scraped: {len(recipes)}")
+        logger.info(f"Scraping completed! Total recipes: {len(recipes)} (Added {len(new_urls)} new recipes)")
         
         return recipes
 
 def main():
     scraper = DiabetesRecipeScraper()
     
-    # For testing, limit to first few pages
-    recipes = scraper.scrape_all_recipes(max_pages=2, max_recipes=20)
+    # Scrape all recipes, continuing from existing ones
+    recipes = scraper.scrape_all_recipes(continue_from_existing=True)
     
     print(f"Successfully scraped {len(recipes)} recipes")
     
     # Print sample recipe
     if recipes:
-        sample = recipes[0]
-        print("\nSample recipe:")
+        sample = recipes[-1]  # Show the latest recipe
+        print("\nLatest recipe:")
         print(f"Name: {sample.get('name', 'N/A')}")
         print(f"Description: {sample.get('description', 'N/A')[:100]}...")
         print(f"Tags: {sample.get('tags', [])}")
