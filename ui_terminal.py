@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 
-from personalized_chatbot import PersonalizedChatbot
+from chatbot import PersonalizedChatbot
 
 
 def display_chat_history(fp_state, num_turns=2):

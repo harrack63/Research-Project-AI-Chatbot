@@ -2,7 +2,7 @@ from typing import Union, List, Dict
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-from personalized_chatbot import PersonalizedChatbot
+from chatbot import PersonalizedChatbot
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -62,7 +62,7 @@ def chat_endpoint(req: ChatRequest):
 
     try:
         chatbot = PersonalizedChatbot(
-            exp_name="web_debug", llm_model_name="OpenAI/gpt-4.1-nano"
+            exp_name="web_debug", llm_model_name="Azure/gpt-4o"
         )
         reply = chatbot.chat(req.messages[-1].content)
         history.append(Message(role="assistant", content=reply))
