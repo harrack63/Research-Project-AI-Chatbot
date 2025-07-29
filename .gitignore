@@ -212,6 +212,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Claude Code
+.claude/
+
 # RAG dataset
 corpus/dataset
 
