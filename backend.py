@@ -1,4 +1,4 @@
-from typing import Union, List, Dict
+from typing import Union, List
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from config import LOGGING_CONFIG
 import time
+import os
 
 logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger(__name__)
@@ -60,9 +61,32 @@ def chat_endpoint(req: ChatRequest):
             Message(role="assistant", content="Hi! How can I help you today?")
         ] + history
 
+    # TODO: Set user profile
+    user_msg = req.messages[-1].content
+    if user_msg.lower().startswith("admin"):
+        user_profile = user_msg[
+            user_msg.find("admin set user") + len("admin set user") :
+        ]
+        user_profile = user_profile.split()
+        user_profile = "_".join(user_profile)
+        user_profile = user_profile.lower()
+        with open("out/user_profile.txt", "w") as f:
+            f.write(user_profile)
+        logger.info(f"User profile set to: {user_profile}")
+        response = "ADMIN MSG: User profile set to: " + user_profile
+        history.append(Message(role="assistant", content=response))
+        return {"messages": history}
+
     try:
+        # ## Set user profile
+        user_profile = "web_debug"
+        if os.path.exists("out/user_profile.txt"):
+            with open("out/user_profile.txt", "r") as f:
+                user_profile = f.read()
+        logger.info(f"Using user profile: {user_profile}")
+
         chatbot = PersonalizedChatbot(
-            exp_name="web_debug", llm_model_name="Azure/gpt-4o"
+            exp_name=user_profile, llm_model_name="Azure/gpt-4o"
         )
         reply = chatbot.chat(req.messages[-1].content)
         history.append(Message(role="assistant", content=reply))

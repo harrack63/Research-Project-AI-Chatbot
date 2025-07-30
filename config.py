@@ -6,7 +6,7 @@ MILVUS_TOKEN = ""
 
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 
-WORKDIR = "out/web_debug"
+WORKDIR = "out"
 PROMPTS_DIR = "prompts"
 
 LOGGING_CONFIG = {
