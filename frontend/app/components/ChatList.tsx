@@ -8,7 +8,7 @@ type Message = {
 
 type ChatListProps = {
   messages: Message[];
-  chatEndRef: React.RefObject<HTMLDivElement>;
+  chatEndRef: React.RefObject<HTMLDivElement | null>;
   loading: boolean;
 };
 
