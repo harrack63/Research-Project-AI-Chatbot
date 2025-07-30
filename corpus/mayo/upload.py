@@ -33,7 +33,7 @@ embedding_model = OpenAIEmbeddings(
 
 passages = []
 
-with open("dataset/mayo_clinic.json", "r", encoding="utf-8") as f:
+with open("../dataset/mayo_clinic.json", "r", encoding="utf-8") as f:
     dataset = json.load(f)
 
 for passage_id, dataset_info in enumerate(tqdm(dataset)):
