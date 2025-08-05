@@ -337,6 +337,7 @@ class MilvusUtil:
         Returns:
             List of unique tags sorted alphabetically
         """
+        BATCH_SIZE = 1000
         collection_name = "diabetes_recipes"
         
         if not self.collection_exists(collection_name):
@@ -344,21 +345,27 @@ class MilvusUtil:
         
         self.ensure_collection_loaded(collection_name)
         
-        # Query all documents to get their tags
+        # Query all documents to get their tags in batches
         try:
-            # Get all entities with tags field
-            query_results = self.client.query(
-                collection_name=collection_name,
-                filter="id >= 0",  # Get all documents
-                output_fields=["tags"]
-            )
-            
-            # Collect all unique tags
             all_tags = set()
-            for result in query_results:
-                tags = result.get("tags", [])
-                if tags:
-                    all_tags.update(tags)
+            offset = 0
+            while True:
+                batch = self.client.query(
+                    collection_name=collection_name,
+                    filter="id >= 0",
+                    output_fields=["tags"],
+                    limit=BATCH_SIZE,
+                    offset=offset
+                )
+                if not batch:
+                    break
+                for result in batch:
+                    tags = result.get("tags", [])
+                    if tags:
+                        all_tags.update(tags)
+                if len(batch) < BATCH_SIZE:
+                    break
+                offset += len(batch)
             
             return sorted(list(all_tags))
             
@@ -383,23 +390,33 @@ class MilvusUtil:
             # Get basic collection stats
             basic_stats = self.get_collection_stats(collection_name)
             
-            # Get all tags and their counts
-            query_results = self.client.query(
-                collection_name=collection_name,
-                filter="id >= 0",
-                output_fields=["tags"]
-            )
-            
+            # Paginate through all documents to avoid loading all at once
+            batch_size = 1000
+            offset = 0
             tag_counts = {}
-            total_recipes = len(query_results)
+            total_recipes = 0
             recipes_with_tags = 0
-            
-            for result in query_results:
-                tags = result.get("tags", [])
-                if tags:
-                    recipes_with_tags += 1
-                    for tag in tags:
-                        tag_counts[tag] = tag_counts.get(tag, 0) + 1
+
+            while True:
+                batch_results = self.client.query(
+                    collection_name=collection_name,
+                    filter="id >= 0",
+                    output_fields=["tags"],
+                    limit=batch_size,
+                    offset=offset
+                )
+                if not batch_results:
+                    break
+                total_recipes += len(batch_results)
+                for result in batch_results:
+                    tags = result.get("tags", [])
+                    if tags:
+                        recipes_with_tags += 1
+                        for tag in tags:
+                            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                if len(batch_results) < batch_size:
+                    break
+                offset += batch_size
             
             # Sort tags by count (descending)
             sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
@@ -484,7 +501,7 @@ def main():
             # Test search with tag filter
             if all_tags:
                 test_tag = all_tags[0]  # Use first available tag
-                print(f"\\nSearching for recipes with tag '{test_tag}':")
+                print(f"\nSearching for recipes with tag '{test_tag}':")
                 filtered_results = milvus_util.search_diabetes_recipes("recipe", limit=3, tags=[test_tag])
                 for i, result in enumerate(filtered_results, 1):
                     print(f"Result {i} (Score: {result.get('score', 0):.3f}): Tags: {result.get('tags', [])}")
@@ -492,7 +509,7 @@ def main():
             print(f"Tag filtering test failed: {e}")
         
         # Test collection stats
-        print("\\n6. Testing collection statistics:")
+        print("\n6. Testing collection statistics:")
         print("-" * 40)
         try:
             stats = milvus_util.get_diabetes_recipe_stats()
@@ -505,7 +522,7 @@ def main():
         except Exception as e:
             print(f"Collection stats test failed: {e}")
         
-        print("\\n" + "=" * 60)
+        print("\n" + "=" * 60)
         print("Testing complete!")
         
     except Exception as e:
