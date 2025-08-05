@@ -3,7 +3,7 @@ import numpy as np
 import os
 from collections import defaultdict
 from scipy.sparse import csr_matrix
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient, DataType
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
@@ -38,9 +38,22 @@ def create_milvus_collection(collection_name: str):
     
     if milvus_client.has_collection(collection_name=collection_name):
         milvus_client.drop_collection(collection_name=collection_name)
+    # Create schema with tags field for filtering
+    schema = MilvusClient.create_schema()
+    
+    schema.add_field(field_name="id", datatype=DataType.INT64, is_primary=True)
+    schema.add_field(field_name="vector", datatype=DataType.FLOAT_VECTOR, dim=embedding_dim)
+    schema.add_field(field_name="text", datatype=DataType.VARCHAR, max_length=65535)
+    schema.add_field(field_name="tags", datatype=DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=50, max_length=100)
+    
+    index_params = milvus_client.prepare_index_params()
+
+    index_params.add_index(field_name="vector", index_type="AUTOINDEX", metric_type="COSINE")
+
     milvus_client.create_collection(
         collection_name=collection_name,
-        dimension=embedding_dim,
+        schema=schema,
+        index_params=index_params,
         consistency_level="Strong",
     )
 
@@ -125,6 +138,7 @@ def upload_diabetes_recipes_to_milvus(collection_name: str = "diabetes_recipes")
                 "id": i,
                 "text": combined_text,
                 "vector": embeddings[i],
+                "tags": metadata.get("tags", []),
             }
         )
     
@@ -138,6 +152,10 @@ def upload_diabetes_recipes_to_milvus(collection_name: str = "diabetes_recipes")
         total_inserted += len(batch)
     
     print(f"Successfully inserted {total_inserted} diabetes recipes into collection '{collection_name}'")
+
+    print("Loading collection for search operations...")
+    milvus_client.load_collection(collection_name=collection_name)
+    print("Collection loaded successfully!")
     
     return total_inserted
 
