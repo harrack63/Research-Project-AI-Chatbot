@@ -1,8 +1,9 @@
 from typing import Union, List, Dict
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 
 from personalized_chatbot import PersonalizedChatbot
+from users import router as users_router, get_current_user
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,6 +16,9 @@ logger = logging.getLogger(__name__)
 logger.info("Initializing backend")
 
 app = FastAPI()
+
+# Include user authentication routes
+app.include_router(users_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -49,11 +53,21 @@ def read_item(item_id: int, q: Union[str, None] = None):
 
 
 @app.post("/chat", response_model=ChatResponse)
-def chat_endpoint(req: ChatRequest):
+def chat_endpoint(req: ChatRequest, current_user = Depends(get_current_user)):
+    # Print user information
+    user_email = current_user[1] if current_user else "Unknown"
+    user_id = current_user[0] if current_user else "Unknown"
+    username = current_user[2] if current_user else "Unknown"
+    
+    logger.info(f"Chat request from User: {username} (ID: {user_id}, Email: {user_email})")
+    
+    # Print incoming messages
+    logger.info(f"User messages: {[msg.content for msg in req.messages if msg.role == 'user']}")
+    
     # Start with a default assistant greeting if this is a new conversation
     history = req.messages
 
-    logger.info("Received messages from frontend")
+    logger.info("Processing chat messages...")
     start_time = time.time()
     if not history or history[0].role != "assistant":
         history = [

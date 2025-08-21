@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import ChatList from "./components/ChatList";
 import ChatInput from "./components/ChatInput";
 import Navbar from "./components/Navbar";
-import LoginModal from "./components/LoginModal";
+import AuthComponent from "./components/AuthComponent";
 import { handleSendMessage } from "./utils";
 
 export default function Home() {
@@ -14,7 +14,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [userData, setUserData] = useState(null);
   const [isClient, setIsClient] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -29,21 +29,21 @@ export default function Home() {
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
     if (!isLoggedIn) {
-      setShowLoginModal(true);
-      return;
+      return; // AuthComponent will handle showing login modal
     }
     const currentInput = input; // Store the current input
     setInput(""); // Clear input immediately
     await handleSendMessage(messages, currentInput, setMessages, setLoading);
   }
 
-  const handleLogin = (username: string, password: string) => {
-    setIsLoggedIn(true);
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setMessages([{ role: "assistant", content: "Hi! How can I help you today?" }]);
+  const handleAuthStateChange = (loggedIn: boolean, user?: any) => {
+    setIsLoggedIn(loggedIn);
+    setUserData(user || null);
+    
+    if (!loggedIn) {
+      // Reset chat when user logs out
+      setMessages([{ role: "assistant", content: "Hi! How can I help you today?" }]);
+    }
   };
 
   if (!isClient) {
@@ -56,11 +56,10 @@ export default function Home() {
 
   return (
     <div className="font-sans min-h-screen bg-gradient-to-br from-gray-50 to-gray-200 flex flex-col">
-      <Navbar 
-        isLoggedIn={isLoggedIn}
-        onLoginClick={() => setShowLoginModal(true)}
-        onLogoutClick={handleLogout}
-      />
+      <div className="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-gray-800">Health Chatbot</h1>
+        <AuthComponent onAuthStateChange={handleAuthStateChange} />
+      </div>
       
       <div className="flex-1 flex items-center justify-center p-4">
         <div className="flex flex-col w-full max-w-[80vw] h-[80vh] bg-white/90 rounded-xl shadow-xl border relative overflow-hidden">
@@ -77,12 +76,6 @@ export default function Home() {
           />
         </div>
       </div>
-
-      <LoginModal
-        isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
-        onLogin={handleLogin}
-      />
     </div>
   );
 }
