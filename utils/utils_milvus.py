@@ -1,8 +1,13 @@
 import os
+import json
 from typing import List, Dict, Any, Optional
 from pymilvus import MilvusClient
 from langchain_openai import OpenAIEmbeddings
 from tqdm import tqdm
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 
 class MilvusUtil:
@@ -29,109 +34,23 @@ class MilvusUtil:
         )
         self.embedding_dim = len(self.embedding_model.embed_query("test"))
 
-    def create_collection(self, collection_name: str, drop_if_exists: bool = True) -> bool:
-        """
-        Create a new Milvus collection.
-        
-        Args:
-            collection_name: Name of the collection to create
-            drop_if_exists: Whether to drop existing collection with same name
-            
-        Returns:
-            True if collection was created successfully
-        """
-        try:
-            if self.client.has_collection(collection_name=collection_name):
-                if drop_if_exists:
-                    self.client.drop_collection(collection_name=collection_name)
-                else:
-                    return False
-            
-            self.client.create_collection(
-                collection_name=collection_name,
-                dimension=self.embedding_dim,
-                consistency_level="Strong",
-            )
-            return True
-        except Exception as e:
-            raise Exception(f"Failed to create collection {collection_name}: {str(e)}")
-
-    def insert_vectors(
-        self, 
-        collection_name: str, 
-        text_list: List[str], 
-        batch_size: int = 512
-    ) -> List[int]:
-        """
-        Insert text data with embeddings into a collection.
-        
-        Args:
-            collection_name: Name of the collection
-            text_list: List of text strings to embed and insert
-            batch_size: Number of items to process in each batch
-            
-        Returns:
-            List of inserted IDs
-        """
-        inserted_ids = []
-        
-        for row_id in tqdm(range(0, len(text_list), batch_size), desc="Inserting"):
-            batch_texts = text_list[row_id : row_id + batch_size]
-            batch_embeddings = self.embedding_model.embed_documents(batch_texts)
-
-            batch_ids = [row_id + j for j in range(len(batch_texts))]
-            batch_data = [
-                {
-                    "id": id_,
-                    "text": text,
-                    "vector": vector,
-                }
-                for id_, text, vector in zip(batch_ids, batch_texts, batch_embeddings)
-            ]
-            
-            self.client.insert(
-                collection_name=collection_name,
-                data=batch_data,
-            )
-            inserted_ids.extend(batch_ids)
-        
-        return inserted_ids
-
-    def delete_vectors(self, collection_name: str, ids: List[int]) -> bool:
-        """
-        Delete vectors from a collection by IDs.
-        
-        Args:
-            collection_name: Name of the collection
-            ids: List of IDs to delete
-            
-        Returns:
-            True if deletion was successful
-        """
-        try:
-            self.client.delete(
-                collection_name=collection_name,
-                ids=ids
-            )
-            return True
-        except Exception as e:
-            raise Exception(f"Failed to delete vectors from {collection_name}: {str(e)}")
-
     def search_vectors(
         self, 
         collection_name: str, 
         query_text: str, 
         limit: int = 5,
-        output_fields: Optional[List[str]] = None
+        output_fields: Optional[List[str]] = None,
+        filter_expr: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
-        Search for similar vectors using text query.
+        Search for similar vectors using text query with optional filtering.
         
         Args:
             collection_name: Name of the collection to search
             query_text: Text query to search for
             limit: Maximum number of results to return
             output_fields: Fields to include in output
+            filter_expr: Optional filter expression for metadata filtering
             
         Returns:
             List of search results with scores and metadata
@@ -141,55 +60,17 @@ class MilvusUtil:
         
         query_embedding = self.embedding_model.embed_query(query_text)
         
-        search_results = self.client.search(
-            collection_name=collection_name,
-            data=[query_embedding],
-            limit=limit,
-            output_fields=output_fields,
-        )[0]
+        search_params = {
+            "collection_name": collection_name,
+            "data": [query_embedding],
+            "limit": limit,
+            "output_fields": output_fields,
+        }
         
-        results = []
-        for result in search_results:
-            result_dict = {
-                "id": result.id,
-                "score": result.distance,
-            }
-            # Add output fields to result
-            for field in output_fields:
-                if hasattr(result, field):
-                    result_dict[field] = getattr(result, field)
-            results.append(result_dict)
+        if filter_expr:
+            search_params["filter"] = filter_expr
         
-        return results
-
-    def search_vectors_by_embedding(
-        self, 
-        collection_name: str, 
-        query_embedding: List[float], 
-        limit: int = 5,
-        output_fields: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Search for similar vectors using embedding vector.
-        
-        Args:
-            collection_name: Name of the collection to search
-            query_embedding: Embedding vector to search with
-            limit: Maximum number of results to return
-            output_fields: Fields to include in output
-            
-        Returns:
-            List of search results with scores and metadata
-        """
-        if output_fields is None:
-            output_fields = ["text"]
-        
-        search_results = self.client.search(
-            collection_name=collection_name,
-            data=[query_embedding],
-            limit=limit,
-            output_fields=output_fields,
-        )[0]
+        search_results = self.client.search(**search_params)[0]
         
         results = []
         for result in search_results:
@@ -214,24 +95,6 @@ class MilvusUtil:
         """
         return self.client.list_collections()
 
-    def drop_collection(self, collection_name: str) -> bool:
-        """
-        Drop a collection.
-        
-        Args:
-            collection_name: Name of the collection to drop
-            
-        Returns:
-            True if collection was dropped successfully
-        """
-        try:
-            if self.client.has_collection(collection_name=collection_name):
-                self.client.drop_collection(collection_name=collection_name)
-                return True
-            return False
-        except Exception as e:
-            raise Exception(f"Failed to drop collection {collection_name}: {str(e)}")
-
     def collection_exists(self, collection_name: str) -> bool:
         """
         Check if a collection exists.
@@ -243,6 +106,36 @@ class MilvusUtil:
             True if collection exists
         """
         return self.client.has_collection(collection_name=collection_name)
+
+    def load_collection(self, collection_name: str):
+        """
+        Load a collection to make it ready for operations.
+        
+        Args:
+            collection_name: Name of the collection to load
+        """
+        if not self.collection_exists(collection_name):
+            raise Exception(f"Collection '{collection_name}' does not exist")
+        
+        try:
+            self.client.load_collection(collection_name=collection_name)
+        except Exception as e:
+            # Collection might already be loaded, which is fine
+            if "already loaded" not in str(e).lower():
+                raise Exception(f"Failed to load collection {collection_name}: {str(e)}")
+
+    def ensure_collection_loaded(self, collection_name: str):
+        """
+        Ensure collection is loaded before operations.
+        
+        Args:
+            collection_name: Name of the collection to ensure is loaded
+        """
+        try:
+            self.load_collection(collection_name)
+        except Exception:
+            # If loading fails, collection might already be loaded
+            pass
 
     def get_collection_stats(self, collection_name: str) -> Dict[str, Any]:
         """
@@ -260,68 +153,381 @@ class MilvusUtil:
         except Exception as e:
             raise Exception(f"Failed to get stats for collection {collection_name}: {str(e)}")
 
+    def search_mayo_clinic(self, query_text: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Search Mayo Clinic passages for relevant information.
+        
+        Args:
+            query_text: Text query to search for
+            limit: Maximum number of results to return
+            
+        Returns:
+            List of search results with scores and passage text
+        """
+        collection_name = "mayo_clinic_passage"
+        
+        if not self.collection_exists(collection_name):
+            raise Exception(f"Mayo Clinic collection '{collection_name}' does not exist")
+        
+        self.ensure_collection_loaded(collection_name)
+        
+        return self.search_vectors(
+            collection_name=collection_name,
+            query_text=query_text,
+            limit=limit,
+            output_fields=["text"]
+        )
+
+    def search_diabetes_recipes(self, query_text: str, limit: int = 5, tags: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        Search diabetes-friendly recipes for relevant information with optional tag filtering.
+        
+        Args:
+            query_text: Text query to search for (e.g., "breakfast recipes", "low carb")
+            limit: Maximum number of results to return
+            tags: Optional list of tags to filter by
+            
+        Returns:
+            List of search results with scores and recipe text
+        """
+        collection_name = "diabetes_recipes"
+        
+        if not self.collection_exists(collection_name):
+            raise Exception(f"Diabetes recipes collection '{collection_name}' does not exist")
+        
+        self.ensure_collection_loaded(collection_name)
+        
+        # Build filter expression for tags if provided
+        filter_expr = None
+        if tags:
+            # Create filter expression for array field
+            tag_conditions = [f'array_contains(tags, "{tag}")' for tag in tags]
+            filter_expr = " or ".join(tag_conditions)
+        
+        return self.search_vectors(
+            collection_name=collection_name,
+            query_text=query_text,
+            limit=limit,
+            output_fields=["text", "tags"],
+            filter_expr=filter_expr
+        )
+
+    def _load_diabetes_recipes_metadata(self) -> List[Dict]:
+        """Load original diabetes recipes data for metadata lookup"""
+        try:
+            # Try multiple possible paths
+            possible_paths = [
+                os.path.join(os.path.dirname(__file__), '..', 'corpus', 'dataset', 'diabetes_recipes.json'),
+                os.path.join(os.path.dirname(__file__), '..', 'dataset', 'diabetes_recipes.json'),
+                'corpus/dataset/diabetes_recipes.json',
+                'dataset/diabetes_recipes.json'
+            ]
+            
+            for filepath in possible_paths:
+                if os.path.exists(filepath):
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        return json.load(f)
+            
+            raise FileNotFoundError("Could not find diabetes_recipes.json file")
+        except Exception as e:
+            raise Exception(f"Failed to load diabetes recipes metadata: {str(e)}")
+
+    def format_diabetes_recipe_paragraph(self, recipe_data: Dict, similarity_score: float) -> str:
+        """
+        Format a diabetes recipe result with full instructions, ingredients, and nutrition.
+        
+        Args:
+            recipe_data: Recipe data dictionary
+            similarity_score: Similarity score from search
+            
+        Returns:
+            Formatted string with complete recipe details
+        """
+        name = recipe_data.get('name', 'Unknown Recipe')
+        description = recipe_data.get('description', 'No description available.')
+        nutrition = recipe_data.get('nutrition_facts', {})
+        ingredients = recipe_data.get('ingredients', [])
+        instructions = recipe_data.get('instructions', [])
+        
+        result_parts = []
+        
+        # Recipe name and description
+        result_parts.append(f"**{name}** (Similarity: {similarity_score:.3f})")
+        result_parts.append(f"Description: {description}")
+        
+        # Full nutrition information
+        if nutrition:
+            result_parts.append("\nNutrition Facts:")
+            for key, value in nutrition.items():
+                if value:
+                    # Format key to be more readable
+                    formatted_key = key.replace('_', ' ').title()
+                    result_parts.append(f"  {formatted_key}: {value}")
+        
+        # Complete ingredients list
+        if ingredients:
+            result_parts.append(f"\nIngredients ({len(ingredients)} total):")
+            for i, ingredient in enumerate(ingredients, 1):
+                name = ingredient.get('name', 'Unknown ingredient')
+                amount_us = ingredient.get('amount_us', '')
+                amount_metric = ingredient.get('amount_metric', '')
+                
+                ingredient_line = f"  {i}. {name}"
+                if amount_us:
+                    ingredient_line += f" - {amount_us}"
+                if amount_metric:
+                    ingredient_line += f" ({amount_metric})"
+                
+                result_parts.append(ingredient_line)
+        
+        # Complete instructions line by line
+        if instructions:
+            result_parts.append(f"\nInstructions ({len(instructions)} steps):")
+            for i, instruction in enumerate(instructions, 1):
+                result_parts.append(f"  {i}. {instruction}")
+        
+        return "\n".join(result_parts)
+
+    def search_diabetes_recipes_formatted(self, query_text: str, limit: int = 3, tags: Optional[List[str]] = None) -> str:
+        """
+        Search diabetes recipes and return formatted paragraphs with metadata.
+        
+        Args:
+            query_text: Text query to search for
+            limit: Maximum number of results to return
+            tags: Optional list of tags to filter by
+            
+        Returns:
+            Formatted string with recipe paragraphs
+        """
+        # Get search results
+        search_results = self.search_diabetes_recipes(query_text, limit, tags)
+        
+        if not search_results:
+            return "No diabetes recipes found for your query."
+        
+        # Load original recipe metadata
+        try:
+            original_recipes = self._load_diabetes_recipes_metadata()
+        except Exception as e:
+            return f"Error loading recipe metadata: {str(e)}"
+        
+        # Format results
+        formatted_results = []
+        formatted_results.append(f"Found {len(search_results)} diabetes-friendly recipes for '{query_text}':\n")
+        
+        for i, result in enumerate(search_results, 1):
+            recipe_id = result.get('id', -1)
+            similarity_score = result.get('score', 0.0)
+            
+            # Get original recipe data
+            if 0 <= recipe_id < len(original_recipes):
+                recipe_data = original_recipes[recipe_id]
+                paragraph = self.format_diabetes_recipe_paragraph(recipe_data, similarity_score)
+                formatted_results.append(f"{i}. {paragraph}")
+            else:
+                formatted_results.append(f"{i}. Recipe not found in metadata (ID: {recipe_id})")
+        
+        return "\n\n".join(formatted_results)
+
+    def get_all_diabetes_recipe_tags(self) -> List[str]:
+        """
+        Get all unique tags from the diabetes recipes collection.
+        
+        Returns:
+            List of unique tags sorted alphabetically
+        """
+        BATCH_SIZE = 1000
+        collection_name = "diabetes_recipes"
+        
+        if not self.collection_exists(collection_name):
+            raise Exception(f"Diabetes recipes collection '{collection_name}' does not exist")
+        
+        self.ensure_collection_loaded(collection_name)
+        
+        # Query all documents to get their tags in batches
+        try:
+            all_tags = set()
+            offset = 0
+            while True:
+                batch = self.client.query(
+                    collection_name=collection_name,
+                    filter="id >= 0",
+                    output_fields=["tags"],
+                    limit=BATCH_SIZE,
+                    offset=offset
+                )
+                if not batch:
+                    break
+                for result in batch:
+                    tags = result.get("tags", [])
+                    if tags:
+                        all_tags.update(tags)
+                if len(batch) < BATCH_SIZE:
+                    break
+                offset += len(batch)
+            
+            return sorted(list(all_tags))
+            
+        except Exception as e:
+            raise Exception(f"Failed to retrieve tags from collection {collection_name}: {str(e)}")
+
+    def get_diabetes_recipe_stats(self) -> Dict[str, Any]:
+        """
+        Get statistics about the diabetes recipes collection including tag counts.
+        
+        Returns:
+            Dictionary with collection statistics and tag information
+        """
+        collection_name = "diabetes_recipes"
+        
+        if not self.collection_exists(collection_name):
+            raise Exception(f"Diabetes recipes collection '{collection_name}' does not exist")
+        
+        self.ensure_collection_loaded(collection_name)
+        
+        try:
+            # Get basic collection stats
+            basic_stats = self.get_collection_stats(collection_name)
+            
+            # Paginate through all documents to avoid loading all at once
+            batch_size = 1000
+            offset = 0
+            tag_counts = {}
+            total_recipes = 0
+            recipes_with_tags = 0
+
+            while True:
+                batch_results = self.client.query(
+                    collection_name=collection_name,
+                    filter="id >= 0",
+                    output_fields=["tags"],
+                    limit=batch_size,
+                    offset=offset
+                )
+                if not batch_results:
+                    break
+                total_recipes += len(batch_results)
+                for result in batch_results:
+                    tags = result.get("tags", [])
+                    if tags:
+                        recipes_with_tags += 1
+                        for tag in tags:
+                            tag_counts[tag] = tag_counts.get(tag, 0) + 1
+                if len(batch_results) < batch_size:
+                    break
+                offset += batch_size
+            
+            # Sort tags by count (descending)
+            sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)
+            
+            return {
+                "basic_stats": basic_stats,
+                "total_recipes": total_recipes,
+                "recipes_with_tags": recipes_with_tags,
+                "unique_tags_count": len(tag_counts),
+                "tag_counts": dict(sorted_tags),
+                "most_common_tags": sorted_tags[:10]  # Top 10 most common tags
+            }
+            
+        except Exception as e:
+            raise Exception(f"Failed to get stats for collection {collection_name}: {str(e)}")
+
 
 def main():
     """
-    Test function demonstrating MilvusUtil usage similar to test_rag.py
+    Test function to demonstrate the MilvusUtil functionality
     """
-    import os
-    from dotenv import load_dotenv
-    
-    # Load environment variables from .env file
-    load_dotenv()
-    
-    # Initialize MilvusUtil
-    milvus_util = MilvusUtil()
-    
-    # Collection name for testing
-    passage_col_name = "mayo_clinic_passage"
-    
-    # Test query (same as in test_rag.py)
-    query = "What are the symptoms of type 1 diabetes?"
-    top_k = 3
-    
-    print(f"Testing search with query: '{query}'")
-    print(f"Collection: {passage_col_name}")
-    print(f"Top K results: {top_k}")
-    print("-" * 50)
+    print("Testing MilvusUtil functionality...")
+    print("=" * 60)
     
     try:
-        # Check if collection exists
-        if not milvus_util.collection_exists(passage_col_name):
-            print(f"Collection '{passage_col_name}' does not exist!")
-            print("Available collections:", milvus_util.list_collections())
-            return
+        # Initialize MilvusUtil
+        milvus_util = MilvusUtil()
         
-        # Perform search
-        search_results = milvus_util.search_vectors(
-            collection_name=passage_col_name,
-            query_text=query,
-            limit=top_k,
-            output_fields=["text"]
-        )
-        
-        print("Search Results:")
-        for i, result in enumerate(search_results, 1):
-            print(f"{i}. ID: {result['id']}, Score: {result['score']:.4f}")
-            print(f"   Text: {result['text'][:100]}...")
-            print()
-        
-        # Additional test: List all collections
-        print("Available collections:")
+        # Test collection listing
+        print("1. Available collections:")
         collections = milvus_util.list_collections()
         for collection in collections:
-            print(f"- {collection}")
+            print(f"   - {collection}")
+        print()
         
-        # Test collection statistics
-        if collections:
-            stats = milvus_util.get_collection_stats(passage_col_name)
-            print(f"\nCollection '{passage_col_name}' stats:")
-            for key, value in stats.items():
-                print(f"  {key}: {value}")
-                
+        # Test Mayo Clinic search
+        print("2. Testing Mayo Clinic search:")
+        print("-" * 40)
+        mayo_query = "diabetes management and blood sugar"
+        try:
+            mayo_results = milvus_util.search_mayo_clinic(mayo_query, limit=2)
+            print(f"Query: '{mayo_query}'")
+            for i, result in enumerate(mayo_results, 1):
+                print(f"Result {i} (Score: {result.get('score', 0):.3f}):")
+                print(f"Text: {result.get('text', 'No text')[:150]}...")
+                print()
+        except Exception as e:
+            print(f"Mayo Clinic search failed: {e}")
+        
+        # Test diabetes recipes search (raw)
+        print("3. Testing diabetes recipes search (raw):")
+        print("-" * 40)
+        recipe_query = "breakfast low carb"
+        try:
+            recipe_results = milvus_util.search_diabetes_recipes(recipe_query, limit=2)
+            print(f"Query: '{recipe_query}'")
+            for i, result in enumerate(recipe_results, 1):
+                print(f"Result {i} (ID: {result.get('id', 'N/A')}, Score: {result.get('score', 0):.3f}):")
+                print(f"Text: {result.get('text', 'No text')[:100]}...")
+                print()
+        except Exception as e:
+            print(f"Diabetes recipes search failed: {e}")
+        
+        # Test formatted diabetes recipes search
+        print("4. Testing formatted diabetes recipes search:")
+        print("-" * 40)
+        formatted_query = "chicken dinner recipes"
+        try:
+            formatted_results = milvus_util.search_diabetes_recipes_formatted(formatted_query, limit=2)
+            print(formatted_results)
+        except Exception as e:
+            print(f"Formatted diabetes recipes search failed: {e}")
+        
+        # Test tag filtering
+        print("5. Testing tag filtering:")
+        print("-" * 40)
+        try:
+            # Get all available tags first
+            all_tags = milvus_util.get_all_diabetes_recipe_tags()
+            print(f"Available tags ({len(all_tags)}): {', '.join(all_tags[:10])}{'...' if len(all_tags) > 10 else ''}")
+            
+            # Test search with tag filter
+            if all_tags:
+                test_tag = all_tags[0]  # Use first available tag
+                print(f"\nSearching for recipes with tag '{test_tag}':")
+                filtered_results = milvus_util.search_diabetes_recipes("recipe", limit=3, tags=[test_tag])
+                for i, result in enumerate(filtered_results, 1):
+                    print(f"Result {i} (Score: {result.get('score', 0):.3f}): Tags: {result.get('tags', [])}")
+        except Exception as e:
+            print(f"Tag filtering test failed: {e}")
+        
+        # Test collection stats
+        print("\n6. Testing collection statistics:")
+        print("-" * 40)
+        try:
+            stats = milvus_util.get_diabetes_recipe_stats()
+            print(f"Total recipes: {stats['total_recipes']}")
+            print(f"Recipes with tags: {stats['recipes_with_tags']}")
+            print(f"Unique tags: {stats['unique_tags_count']}")
+            print("Most common tags:")
+            for tag, count in stats['most_common_tags'][:5]:
+                print(f"  {tag}: {count}")
+        except Exception as e:
+            print(f"Collection stats test failed: {e}")
+        
+        print("\n" + "=" * 60)
+        print("Testing complete!")
+        
     except Exception as e:
-        print(f"Error during testing: {str(e)}")
+        print(f"Error initializing MilvusUtil: {e}")
+        print("Make sure your .env file has MILVUS_URI and OPENAI_API_KEY set")
 
 
 if __name__ == "__main__":
