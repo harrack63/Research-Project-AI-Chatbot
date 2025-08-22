@@ -1,9 +1,10 @@
 
 from typing import Union, List
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 
 from chatbot import PersonalizedChatbot
+from users import router as users_router, get_current_user
 
 from fastapi.middleware.cors import CORSMiddleware
 
