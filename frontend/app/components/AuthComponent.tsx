@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { 
   loginUser, 
   registerUser, 
@@ -10,13 +10,23 @@ import {
   getCurrentUser 
 } from "../utils";
 
+interface UserData {
+  username: string;
+  email: string;
+  id?: string;
+}
+
+interface AuthResponse {
+  user: UserData;
+}
+
 interface AuthComponentProps {
-  onAuthStateChange: (isLoggedIn: boolean, userData?: any) => void;
+  onAuthStateChange: (isLoggedIn: boolean, userData?: UserData) => void;
 }
 
 export default function AuthComponent({ onAuthStateChange }: AuthComponentProps) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userData, setUserData] = useState<any>(null);
+  const [userData, setUserData] = useState<UserData | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [loading, setLoading] = useState(false);
@@ -28,25 +38,15 @@ export default function AuthComponent({ onAuthStateChange }: AuthComponentProps)
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  useEffect(() => {
-    if (isClient) {
-      checkAuthStatus();
-    }
-  }, [isClient]);
-
-  const checkAuthStatus = async () => {
+  const checkAuthStatus = useCallback(async () => {
     if (isAuthenticated()) {
       try {
-        const user = await getCurrentUser();
+        const user = await getCurrentUser() as UserData;
         setUserData(user);
         setIsLoggedIn(true);
         onAuthStateChange(true, user);
       } catch (error) {
-        console.log("Auth check failed, logging out:", error.message);
+        console.log("Auth check failed, logging out:", error instanceof Error ? error.message : "Unknown error");
         // Token is invalid/expired, clear everything and set logged out state
         setUserData(null);
         setIsLoggedIn(false);
@@ -63,7 +63,17 @@ export default function AuthComponent({ onAuthStateChange }: AuthComponentProps)
       setIsLoggedIn(false);
       onAuthStateChange(false);
     }
-  };
+  }, [onAuthStateChange]);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  useEffect(() => {
+    if (isClient) {
+      checkAuthStatus();
+    }
+  }, [isClient]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,14 +81,14 @@ export default function AuthComponent({ onAuthStateChange }: AuthComponentProps)
     setLoading(true);
 
     try {
-      const response = await loginUser({ email, password });
+      const response = await loginUser({ email, password }) as AuthResponse;
       setUserData(response.user);
       setIsLoggedIn(true);
       setShowAuthModal(false);
       onAuthStateChange(true, response.user);
       resetForm();
-    } catch (err: any) {
-      setError(err.message || "Login failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Login failed");
     } finally {
       setLoading(false);
     }
@@ -90,14 +100,14 @@ export default function AuthComponent({ onAuthStateChange }: AuthComponentProps)
     setLoading(true);
 
     try {
-      const response = await registerUser({ email, username, password });
+      const response = await registerUser({ email, username, password }) as AuthResponse;
       setUserData(response.user);
       setIsLoggedIn(true);
       setShowAuthModal(false);
       onAuthStateChange(true, response.user);
       resetForm();
-    } catch (err: any) {
-      setError(err.message || "Registration failed");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }

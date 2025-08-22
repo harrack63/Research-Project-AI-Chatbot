@@ -1,9 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Correct key for dev CORS
-  allowedDevOrigins: ["http://localhost:3000"],
-  basePath: "/healthChatbot",
+  /* config options here */
+  devIndicators: false,
+  basePath: '/healthChatbot',
+  trailingSlash: true,
 };
 
 export default nextConfig;
