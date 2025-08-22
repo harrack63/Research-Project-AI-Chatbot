@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import ChatList from "./components/ChatList";
 import ChatInput from "./components/ChatInput";
-import Navbar from "./components/Navbar";
 import AuthComponent from "./components/AuthComponent";
 import { handleSendMessage } from "./utils";
 
@@ -14,7 +13,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userData, setUserData] = useState(null);
+  const [userData, setUserData] = useState<{username: string; email: string} | null>(null);
   const [isClient, setIsClient] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +35,7 @@ export default function Home() {
     await handleSendMessage(messages, currentInput, setMessages, setLoading);
   }
 
-  const handleAuthStateChange = (loggedIn: boolean, user?: any) => {
+  const handleAuthStateChange = (loggedIn: boolean, user?: {username: string; email: string}) => {
     setIsLoggedIn(loggedIn);
     setUserData(user || null);
     
