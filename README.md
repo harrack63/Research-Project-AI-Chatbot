@@ -1,39 +1,36 @@
-# Personalized Chatbot
+This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Install Instructions (for dev)
+## Getting Started
 
-### Step 0. Build the `conda` environment.
-
-#### Method 1. Tested on Ubuntu 22.04
-```bash
-conda env create -f environment.yaml
-conda activate langgraph
-```
-
-#### Method 2
+First, run the development server:
 
 ```bash
-conda create -n chatbot python=3.13
-pip install -r requirements.txt
+npm run dev
+# or
+yarn dev
+# or
+pnpm dev
+# or
+bun dev
 ```
 
-### Step 1. Create a `.env` file in the project **root directory** and put your `OPENAI_API_KEY` or `FORGE_KEY` in it.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-```bash
-vim .env
-```
+You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-We recommend you to use [Froge by Tensorblock](https://forge.tensorblock.co/) so call large language models, which can switch to different LLMs by simply specifying a different `llm_model_name` when instantiating `PersonalizedChatbot`.
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-If not, simply put your `OPENAI_API_KEY` in the `.env` file so that the framework will automatically use the OpenAI client.
+## Learn More
 
-### Step 2. In the project home directory, build a terminal UI for the chatbot by running
+To learn more about Next.js, take a look at the following resources:
 
-```bash
-python chatbot_terminal_ui.py -n <experiment_name>
-```
+- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
+- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
 
-The persona logs are stored in the `out` folder. When you use the same `<experiment_name>`, the chatbot will load all previous memory and allow you to resume the conversation. By default, the experiment name is `debug`.
+You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-You can create multiple experiments by specifying different `<experiment_name>`'s.
-There are two examplify cases in the `patient_cases` folder for your reference.
+## Deploy on Vercel
+
+The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+
+Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
