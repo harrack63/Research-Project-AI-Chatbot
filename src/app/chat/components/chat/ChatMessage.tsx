@@ -1,5 +1,4 @@
 import type { Message } from '~/lib/types';
-import { Loader } from 'lucide-react';
 
 type ChatMessageProps = {
   message: Message;

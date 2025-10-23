@@ -62,7 +62,7 @@ export default function SidebarRight({
     };
   }, [isResizing, onWidthChange]);
 
-  const columns = width >= 800 ? 2 : 1;
+  const columns = width >= 600 ? 2 : 1;
   const showDragHandle = !isOpen && chatId;
 
   return (
@@ -121,20 +121,19 @@ export default function SidebarRight({
                 }`}
               >
                 {images.map((image) => (
-                  <button
+                 <button
                     key={image.id}
                     onClick={() => setSelectedImage(image)}
-                    className="group relative overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 transition-all"
+                    className="group relative overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 transition-all aspect-square"
                   >
                     <Image
                       src={image.url}
                       alt={image.title}
-                      width={400}
-                      height={400}
+                      fill
                       className="object-cover"
                     />
                     <div className="absolute inset-0 bg-linear-to-t from-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-3">
-                      <div>
+                      <div className="w-full text-center">
                         <p className="text-white text-sm font-medium">
                           {image.title}
                         </p>

@@ -8,7 +8,7 @@ import CollapsedSidebar from "./collapsedSidebar";
 import SearchModal from "./searchModel";
 import CategorySection from "./categorySection";
 import DeleteModal from "./deleteModel";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 type SidebarLeftProps = {
   isOpen: boolean;
@@ -129,6 +129,7 @@ function getCategoryFromDate(date: Date): string {
 
 export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   const params = useParams();
+  const router = useRouter();
   const activeChatId = params?.id as string | null;
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<
@@ -237,6 +238,10 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
       return updated;
     });
     setDeletePrompt({ isOpen: false, chatId: null, chatname: "" });
+
+    if (activeChatId === chatId) {
+    router.push('/chat');
+  }
   };
 
   const handlePin = (e: React.MouseEvent, chatId: string) => {

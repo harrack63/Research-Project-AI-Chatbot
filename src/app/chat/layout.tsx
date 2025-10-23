@@ -1,10 +1,11 @@
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import SidebarLeft from "~/app/chat/components/sidebarLeft/SidebarLeft";
 import SidebarRight from "~/app/chat/components/sidebarRight/SidebarRight";
 import ChatArea from "~/app/chat/components/chat/ChatArea";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
+import { getGlobalChats } from "~/lib/chatStore";
 
 export default function HomePage() {
   const [showLeft, setShowLeft] = useState(true);
@@ -31,6 +32,7 @@ export default function HomePage() {
   };
 
   const params = useParams();
+  const router = useRouter();
   const chatId = (params?.id as string) || "";
 
   const handleRightWidthChange = useCallback(
@@ -51,6 +53,17 @@ export default function HomePage() {
   );
 
   useKeyboardShortcut("l", toggleRight);
+
+   useEffect(() => {
+    if (!chatId) return;
+
+    const chats = getGlobalChats();
+    const chatExists = chats.flatMap((c) => c.chats).some((c) => c.id === chatId);
+
+    if (!chatExists) {
+      router.replace('/chat');
+    }
+  }, [chatId, router]);
 
   return (
     <div className="flex min-h-screen bg-blue-950">
