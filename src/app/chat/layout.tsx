@@ -10,6 +10,8 @@ import { getGlobalChats } from "~/lib/chatStore";
 export default function HomePage() {
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(false);
+  const [hasImages, setHasImages] = useState(false);
+  const [firstResponseReceived, setFirstResponseReceived] = useState(false);
   const [rightWidth, setRightWidth] = useState(400);
 
   const toggleLeft = () => setShowLeft((p) => !p);
@@ -26,7 +28,7 @@ export default function HomePage() {
       } else {
         // When closing right sidebar, re-open left if there's space
         setShowLeft(true);
-       }
+      }
       return newValue;
     });
   };
@@ -54,17 +56,41 @@ export default function HomePage() {
 
   useKeyboardShortcut("l", toggleRight);
 
-   useEffect(() => {
+  useEffect(() => {
     if (!chatId) return;
 
     const chats = getGlobalChats();
-    const chatExists = chats.flatMap((c) => c.chats).some((c) => c.id === chatId);
+    const chatExists = chats
+      .flatMap((c) => c.chats)
+      .some((c) => c.id === chatId);
 
     if (!chatExists) {
-      router.replace('/chat');
+      router.replace("/chat");
     }
   }, [chatId, router]);
 
+  useEffect(() => {
+    if (!chatId) return;
+
+    const checkImages = () => {
+      const chats = getGlobalChats();
+      const chat = chats.flatMap((c) => c.chats).find((c) => c.id === chatId);
+      const imagesExist = (chat?.images || []).length > 0;
+      setHasImages(imagesExist);
+
+      // Auto-show right sidebar if images exist and first
+      // response received
+      if (imagesExist && firstResponseReceived && !showRight) {
+        setShowRight(true);
+      }
+    };
+
+    checkImages();
+    const interval = setInterval(checkImages, 500);
+    return () => clearInterval(interval);
+  }, [chatId, firstResponseReceived, showRight]);
+
+  
   return (
     <div className="flex min-h-screen bg-blue-950">
       {/* Left sidebar - proper width transition */}
@@ -82,12 +108,14 @@ export default function HomePage() {
       </main>
 
       {/* Right sidebar */}
-      <SidebarRight
-        isOpen={showRight}
-        onToggle={toggleRight}
-        width={rightWidth}
-        onWidthChange={handleRightWidthChange}
-      />
+      {hasImages && (
+        <SidebarRight
+          isOpen={showRight}
+          onToggle={toggleRight}
+          width={rightWidth}
+          onWidthChange={handleRightWidthChange}
+        />
+      )}
     </div>
   );
 }

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { getGlobalChats } from "~/lib/chatStore";
 import type { ChatImage } from "~/lib/types";
-import { X } from "lucide-react";
+import { ChevronRight, ChevronLeft } from "lucide-react";
 import Image from "next/image";
 import ImageModal from "./ImageModel";
 
@@ -70,42 +70,54 @@ export default function SidebarRight({
       {/* Drag handle when sidebar is closed */}
       {showDragHandle && (
         <div
-          className="fixed right-0 top-0 bottom-0 w-1 hover:w-2 bg-transparent hover:bg-blue-500/50 transition-all cursor-col-resize z-30 group"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onToggle();
-          }}
+          className="fixed right-2 top-4 z-40"
         >
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-slate-600 rounded-l group-hover:bg-blue-500 transition-colors">
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 flex flex-col justify-center gap-1 pl-0.5">
-              <div className="w-0.5 h-1 bg-slate-400 group-hover:bg-white rounded" />
-              <div className="w-0.5 h-1 bg-slate-400 group-hover:bg-white rounded" />
-              <div className="w-0.5 h-1 bg-slate-400 group-hover:bg-white rounded" />
-            </div>
-          </div>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              onToggle();
+            }}
+            className="bg-blue-600 hover:bg-blue-500 transition-all p-1.5 rounded-md shadow-md flex items-center justify-center"
+            title="Expand sidebar"
+          >
+            <ChevronLeft className="w-4 h-4 text-white" />
+          </button>
         </div>
       )}
 
       {isOpen && (
         <div
-          className="h-screen bg-slate-900 border-l border-slate-800 flex flex-col relative"
+          className={`h-screen bg-slate-900 border-l border-slate-800 flex flex-col relative transform transition-transform duration-300 ease-in-out ${
+            isOpen ? "translate-x-0" : "translate-x-full"
+          }`}
           style={{ width: `${width}px` }}
         >
-          {/* Resize handle */}
+          {/* Collapse button - top right */}
+          <div className="absolute right-2 top-4 z-40">
+            <button
+              onClick={onToggle}
+              className="bg-slate-800 text-white p-1.5 rounded-md shadow hover:bg-slate-700 transition-colors"
+              title="Collapse sidebar"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Drag resize handle */}
           <div
-            className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-blue-500 transition-colors z-10"
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-blue-500/60 transition-colors z-10"
+            onMouseDown={handleMouseDown}
+          />
+
+          {/* Drag handle for resizing */}
+          <div
+            className="absolute left-0 top-0 bottom-0 w-1 cursor-ew-resize hover:bg-blue-500/60 transition-colors z-10"
             onMouseDown={handleMouseDown}
           />
 
           {/* Header */}
           <div className="p-4 border-b border-slate-800 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-white">Patient data</h2>
-            <button
-              onClick={onToggle}
-              className="p-1.5 hover:bg-slate-800 rounded transition-colors"
-            >
-              <X className="w-4 h-4 text-slate-400" />
-            </button>
           </div>
 
           {/* Content */}

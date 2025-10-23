@@ -31,7 +31,7 @@ export default function ImageModal({ image, onClose }: ImageModalProps) {
         </div>
 
         {/* Right panel */}
-        <div className="w-full md:w-[28rem] bg-slate-900 border-t md:border-t-0 md:border-l border-slate-700 flex flex-col">
+        <div className="w-full md:w-md bg-slate-900 border-t md:border-t-0 md:border-l border-slate-700 flex flex-col">
           {/* Header row (title + dismiss) */}
           <div className="flex items-center justify-between pt-4 px-4 border-slate-700">
             <h3 className="text-lg font-semibold text-white truncate pr-2">

@@ -6,12 +6,17 @@ import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { useParams } from "next/navigation";
 
+
 const SCROLL_THRESHOLD = 3000;
 
-export default function ChatArea() {
+type ChatAreaProps = {
+  onFirstResponse?: () => void;
+};
+
+export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
   const params = useParams();
   const chatId = params?.id as string | undefined;
-  const { messages, isLoading, sendMessage } = useChat(chatId);
+  const { messages, isLoading, sendMessage, stopResponse } = useChat(chatId);
   const [input, setInput] = useState("");
   const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -25,6 +30,12 @@ export default function ChatArea() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (messages.some((m) => m.role === "assistant") && onFirstResponse) {
+      onFirstResponse();
+    }
+  }, [messages, onFirstResponse]);
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
@@ -54,6 +65,10 @@ export default function ChatArea() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isLoading) {
+     e.preventDefault();
+     return;
+   }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -117,28 +132,42 @@ export default function ChatArea() {
             onKeyDown={handleKeyDown}
             placeholder="Type your prompt to the bot..."
             rows={3}
+            disabled={isLoading}
             className="flex-1 bg-linear-to-b from-slate-900 to-slate-950 border border-slate-950 text-white placeholder-zinc-500 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-900 resize-none"
           />
           <button
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
+            onClick={() => (isLoading ? stopResponse() : handleSend())}
+            disabled={!isLoading && !input.trim()}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="lucide lucide-arrow-up"
-            >
-              <path d="m5 12 7-7 7 7" />
-              <path d="M12 19V5" />
-            </svg>
+            {isLoading ? (
+             <svg
+               xmlns="http://www.w3.org/2000/svg"
+               width="24"
+               height="24"
+               viewBox="0 0 24 24"
+               fill="currentColor"
+               className="lucide lucide-square"
+             >
+               <rect x="3" y="3" width="18" height="18" rx="2" />
+             </svg>
+           ) : (
+             <svg
+               xmlns="http://www.w3.org/2000/svg"
+               width="24"
+               height="24"
+               viewBox="0 0 24 24"
+               fill="none"
+               stroke="currentColor"
+               strokeWidth="2"
+               strokeLinecap="round"
+               strokeLinejoin="round"
+               className="lucide lucide-arrow-up"
+             >
+               <path d="m5 12 7-7 7 7" />
+               <path d="M12 19V5" />
+             </svg>
+           )}
           </button>
         </div>
       </div>

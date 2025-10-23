@@ -1,11 +1,12 @@
 // hooks/useChat.ts
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Message } from '~/lib/types';
 import { useRouter } from 'next/navigation';
 import { generateUniqueChatId } from '~/lib/chatUtils';
 import { createNewChat } from '~/lib/chatStore';
 
 export function useChat(currentChatId?: string) {
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
@@ -88,6 +89,10 @@ export function useChat(currentChatId?: string) {
     [currentChatId, router, processMessage, addMessage]
   );
 
+  const stopResponse = () => {
+    abortControllerRef.current?.abort();
+  };
+
   // Handle first message from URL params
   useEffect(() => {
     if (!currentChatId) return;
@@ -113,5 +118,5 @@ export function useChat(currentChatId?: string) {
     }
   }, [currentChatId, messages.length, processMessage]);
 
-  return { messages, isLoading, sendMessage };
+  return { messages, isLoading, sendMessage, stopResponse };
 }
