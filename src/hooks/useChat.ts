@@ -1,12 +1,14 @@
-import { useState, useCallback } from 'react';
+// hooks/useChat.ts
+import { useState, useCallback, useEffect } from 'react';
 import type { Message } from '~/lib/types';
 import { useRouter } from 'next/navigation';
 import { generateUniqueChatId } from '~/lib/chatUtils';
-import { createNewChat, getGlobalChats } from '~/lib/chatStore';
+import { createNewChat } from '~/lib/chatStore';
 
 export function useChat(currentChatId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingInput, setPendingInput] = useState<string>('');
   const router = useRouter();
 
   const addMessage = useCallback((message: Message) => {
@@ -26,19 +28,8 @@ export function useChat(currentChatId?: string) {
     });
   }, []);
 
-  const sendMessage = useCallback(
+  const processMessage = useCallback(
     async (userInput: string) => {
-      if (!userInput.trim()) return;
-
-      if (!currentChatId) {
-        const userId = "user-temp"; // TODO: Replace with actual user ID from auth
-        const newChatId = generateUniqueChatId(userId);
-        createNewChat(newChatId, "New Chat");
-        router.push(`/chat/${newChatId}`);
-        return;
-      }
-
-      // Add user message
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: 'user',
@@ -49,7 +40,6 @@ export function useChat(currentChatId?: string) {
 
       setIsLoading(true);
 
-      // Add empty assistant message for streaming
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
         role: 'assistant',
@@ -59,13 +49,9 @@ export function useChat(currentChatId?: string) {
       addMessage(assistantMessage);
 
       try {
-        // Simulate streaming from backend (replace with real WebSocket/API call)
-        const response =
-          "Hi, I'm your classic chat bot";
-
-        // Stream the response character by character
+        const response = "Hi, I'm your classic chat bot"; // Get actual response from here, (j function call to take care of the shit)
         for (let i = 0; i < response.length; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 10)); // 30ms per char for demo
+          await new Promise((resolve) => setTimeout(resolve, 10));
           updateLastMessage(response.substring(0, i + 1));
         }
       } catch (error) {
@@ -74,8 +60,35 @@ export function useChat(currentChatId?: string) {
         setIsLoading(false);
       }
     },
-    [addMessage, updateLastMessage, currentChatId, router]
+    [addMessage, updateLastMessage]
   );
+
+  const sendMessage = useCallback(
+    async (userInput: string) => {
+      if (!userInput.trim()) return;
+
+      if (!currentChatId) {
+        const userId = "user-temp";
+        const newChatId = generateUniqueChatId(userId);
+        createNewChat(newChatId, "New Chat");
+        setPendingInput(userInput);
+        router.push(`/chat/${newChatId}`);
+        return;
+      }
+
+      await processMessage(userInput);
+    },
+    [currentChatId, router, processMessage]
+  );
+
+  // Process pending message after navigation
+  useEffect(() => {
+    if (currentChatId && pendingInput) {
+      const input = pendingInput;
+      setPendingInput('');
+      processMessage(input);
+    }
+  }, [currentChatId, pendingInput, processMessage]);
 
   return { messages, isLoading, sendMessage };
 }

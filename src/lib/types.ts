@@ -3,6 +3,14 @@ export type Chat = {
   label: string;
   chatname: string;
   date: Date;
+  images?: ChatImage[];
+};
+
+export type ChatImage = {
+  id: string;
+  url: string;
+  title: string;
+  description: string;
 };
 
 export type ChatCategory = {
