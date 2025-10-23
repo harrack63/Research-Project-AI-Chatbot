@@ -1,5 +1,6 @@
 import ChatItem from "./chatItem";
 import type { Chat } from "~/lib/types";
+import { useRouter } from 'next/navigation';
 
 type CategorySectionProps = {
   label: string;
@@ -16,7 +17,6 @@ type CategorySectionProps = {
     chatId: string,
     chatname: string
   ) => void;
-  onSelectChat: (id: string) => void;
 };
 
 export default function CategorySection({
@@ -30,8 +30,9 @@ export default function CategorySection({
   pinnedChatIds,
   onPin,
   onDelete,
-  onSelectChat,
 }: CategorySectionProps) {
+  const router = useRouter();
+
   return (
     <div>
       <button
@@ -88,7 +89,7 @@ export default function CategorySection({
               onPin={onPin}
               onDelete={onDelete}
               category={label}
-              onClick={() => onSelectChat(chat.id)}
+              onClick={() => router.push(`/chat/${chat.id}`)}
             />
           ))}
         </div>

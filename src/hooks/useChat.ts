@@ -1,9 +1,13 @@
 import { useState, useCallback } from 'react';
 import type { Message } from '~/lib/types';
+import { useRouter } from 'next/navigation';
+import { generateUniqueChatId } from '~/lib/chatUtils';
+import { createNewChat, getGlobalChats } from '~/lib/chatStore';
 
-export function useChat() {
+export function useChat(currentChatId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const addMessage = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
@@ -25,6 +29,14 @@ export function useChat() {
   const sendMessage = useCallback(
     async (userInput: string) => {
       if (!userInput.trim()) return;
+
+      if (!currentChatId) {
+        const userId = "user-temp"; // TODO: Replace with actual user ID from auth
+        const newChatId = generateUniqueChatId(userId);
+        createNewChat(newChatId, "New Chat");
+        router.push(`/chat/${newChatId}`);
+        return;
+      }
 
       // Add user message
       const userMessage: Message = {
@@ -62,7 +74,7 @@ export function useChat() {
         setIsLoading(false);
       }
     },
-    [addMessage, updateLastMessage]
+    [addMessage, updateLastMessage, currentChatId, router]
   );
 
   return { messages, isLoading, sendMessage };

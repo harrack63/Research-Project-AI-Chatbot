@@ -1,29 +1,41 @@
-'use client';
+"use client";
 
-import { useRef, useEffect, useState } from 'react';
-import { useChat } from '~/hooks/useChat';
-import ChatMessage from './ChatMessage';
-import { useKeyboardShortcut } from '~/hooks/useKeyboardShortcut';
+import { useRef, useEffect, useState } from "react";
+import { useChat } from "~/hooks/useChat";
+import ChatMessage from "./ChatMessage";
+import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
+import { useParams } from "next/navigation";
+import { getGlobalChats } from "~/lib/chatStore";
 
-const SCROLL_THRESHOLD = 3000; // Show button when 300px from bottom
+const SCROLL_THRESHOLD = 3000;
 
 export default function ChatArea() {
-  const { messages, isLoading, sendMessage } = useChat();
-  const [input, setInput] = useState('');
+  const params = useParams();
+  const chatId = params?.id as string | undefined;
+  const { messages, isLoading, sendMessage } = useChat(chatId);
+  const [input, setInput] = useState("");
   const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom
+  // Load chat title on mount
+  const chatTitle = (() => {
+    if (!chatId) return "New Chat";
+    const chats = getGlobalChats();
+    const chat = chats
+      .flatMap((c) => c.chats)
+      .find((c) => c.id === chatId);
+    return chat?.chatname ?? "New Chat";
+  })();
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Detect scroll position
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) return;
@@ -32,26 +44,24 @@ export default function ChatArea() {
       const { scrollHeight, scrollTop, clientHeight } = scrollContainer;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-      // Show button if more than SCROLL_THRESHOLD px from bottom
       setShowScrollButton(distanceFromBottom > SCROLL_THRESHOLD);
     };
 
-    scrollContainer.addEventListener('scroll', handleScroll);
-    return () => scrollContainer.removeEventListener('scroll', handleScroll);
+    scrollContainer.addEventListener("scroll", handleScroll);
+    return () => scrollContainer.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Ctrl/Cmd + Down Arrow to scroll to bottom
-  useKeyboardShortcut('arrowdown', scrollToBottom);
+  useKeyboardShortcut("arrowdown", scrollToBottom);
 
   const handleSend = async () => {
     if (input.trim()) {
       await sendMessage(input);
-      setInput('');
+      setInput("");
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -59,10 +69,15 @@ export default function ChatArea() {
 
   return (
     <div className="flex-1 flex flex-col relative bg-blue-950 overflow-hidden">
+      {/* Title Bar */}
+      <div className="px-6 py-4 border-b border-slate-700 bg-blue-950">
+        <h2 className="text-sm font-semibold text-white">{chatTitle}</h2>
+      </div>
+
       {/* Scroll container */}
       <div
         ref={scrollContainerRef}
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 top-16 overflow-y-auto overflow-x-hidden"
       >
         {/* Messages wrapper - centered with max width */}
         <div className="flex flex-col min-h-full px-6 pt-12 pb-80">
@@ -81,7 +96,7 @@ export default function ChatArea() {
         </div>
       </div>
 
-      {/* Scroll to bottom button - only show when far from bottom */}
+      {/* Scroll to bottom button */}
       {showScrollButton && (
         <button
           onClick={scrollToBottom}

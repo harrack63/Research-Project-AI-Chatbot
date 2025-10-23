@@ -1,14 +1,16 @@
+import { useRouter } from 'next/navigation';
+
 type CollapsedSidebarProps = {
   onToggle: () => void;
-  onNewChat: () => void;
   onSearch: () => void;
 };
 
 export default function CollapsedSidebar({
   onToggle,
-  onNewChat,
   onSearch,
 }: CollapsedSidebarProps) {
+  const router = useRouter();
+
   return (
     <div className="fixed left-4 top-4 bg-slate-900 border border-slate-800 rounded-lg flex gap-1 p-1.5 z-40 shadow-lg">
       <button
@@ -52,7 +54,7 @@ export default function CollapsedSidebar({
       </button>
 
       <button
-        onClick={onNewChat}
+        onClick={() => router.push('/chat')}
         className="p-1.5 hover:bg-slate-800 rounded transition-colors text-white"
         title="New Chat"
       >

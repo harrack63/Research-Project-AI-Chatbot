@@ -14,7 +14,7 @@ export default function DeleteModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+    <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 animate-fade-in">
       <div className="bg-slate-900 rounded-xl p-6 max-w-md mx-4 border border-slate-800 animate-scale-in origin-center">
         <h2 className="text-xl font-semibold text-white mb-3">Delete Thread</h2>
         <p className="text-slate-300 text-sm mb-6">

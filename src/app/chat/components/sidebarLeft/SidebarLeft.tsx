@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import type { ChatCategory } from "~/lib/types";
+import { setGlobalChats } from "~/lib/chatStore";
 import CollapsedSidebar from "./collapsedSidebar";
 import SearchModal from "./searchModel";
 import CategorySection from "./categorySection";
 import DeleteModal from "./deleteModel";
+import { useParams } from "next/navigation";
 
 type SidebarLeftProps = {
   isOpen: boolean;
@@ -84,7 +86,8 @@ function getCategoryFromDate(date: Date): string {
 }
 
 export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
-  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const params = useParams();
+  const activeChatId = params?.id as string | null;
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, boolean>
@@ -106,11 +109,20 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     new Set(mockChats[0].chats.map((c) => c.id))
   );
 
+  useEffect(() => {
+    setGlobalChats(chats);
+  }, [chats]);
+
   const stableToggle = useCallback(() => {
     onToggle();
   }, [onToggle]);
+  
+  const handleNewChat = useCallback(() => {
+     window.location.href = `/chat`;
+   }, []);
 
   useKeyboardShortcut("j", stableToggle);
+  useKeyboardShortcut("k", handleNewChat);
   useKeyboardShortcut("/", () => {
     if (isOpen) {
       const searchInput = document.querySelector(
@@ -176,11 +188,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     setDeletePrompt({ isOpen: false, chatId: null, chatname: "" });
   };
 
-  const handlePin = (
-    e: React.MouseEvent,
-    chatId: string,
-    category: string
-  ) => {
+  const handlePin = (e: React.MouseEvent, chatId: string) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -239,7 +247,6 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
       <>
         <CollapsedSidebar
           onToggle={stableToggle}
-          onNewChat={() => console.log("New chat")}
           onSearch={() => setShowSearchModal(true)}
         />
         <SearchModal
@@ -257,9 +264,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         {/* Header */}
         <div className="p-3 border-b border-slate-800 flex items-center justify-between gap-2 mt-1 ml-1">
           <div className="text-center flex-1">
-            <h1 className="text-xs font-bold text-white leading-tight">
-              Logo
-            </h1>
+            <h1 className="text-xs font-bold text-white leading-tight">Logo</h1>
           </div>
           <button
             onClick={stableToggle}
@@ -284,7 +289,10 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
 
         {/* New Chat Button */}
         <div className="px-3 py-2">
-          <button className="w-full py-1.5 px-3 bg-linear-to-r from-blue-600 to-emerald-600 hover:opacity-90 text-white font-semibold rounded text-xs transition-all duration-200 border border-blue-500">
+          <button
+           onClick={handleNewChat}
+           className="w-full py-1.5 px-3 bg-linear-to-r from-blue-600 to-emerald-600 hover:opacity-90 text-white font-semibold rounded text-xs transition-all duration-200 border border-blue-500"
+         >
             New Chat
           </button>
         </div>
@@ -330,7 +338,6 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
               pinnedChatIds={pinnedChatIds}
               onPin={handlePin}
               onDelete={handleDeleteClick}
-              onSelectChat={setActiveChatId}
             />
           ))}
         </div>
@@ -338,7 +345,11 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         {/* Footer */}
         <div className="border-t border-slate-800 p-2 shrink-0">
           <button className="flex items-center gap-2 w-full px-2 py-1.5 rounded hover:bg-slate-800 transition-colors text-xs text-slate-400">
-            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-3.5 h-3.5"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
             </svg>
             <span className="text-xs">Pro</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Chat, ChatCategory } from "~/lib/types";
+import type { ChatCategory } from "~/lib/types";
 import Link from "next/link";
 
 type SearchModalProps = {
@@ -119,16 +119,16 @@ export default function SearchModal({
             opacity: 0;
           }
           to {
-            opacity: 0.3;
+            opacity: 1;
           }
         }
         @keyframes scale-in {
-          from {
+           from {
             opacity: 0;
             transform: scale(0.95);
           }
           to {
-            opacity: 0.3;
+            opacity: 1;
             transform: scale(1);
           }
         }
