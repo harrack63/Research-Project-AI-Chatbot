@@ -11,6 +11,7 @@ type CategorySectionProps = {
   hoveredChatId: string | null;
   onHoverChat: (id: string | null) => void;
   pinnedChatIds: Set<string>;
+  loadingChatId: string | null;
   onPin: (e: React.MouseEvent, chatId: string, category: string) => void;
   onDelete: (
     e: React.MouseEvent,
@@ -28,6 +29,7 @@ export default function CategorySection({
   hoveredChatId,
   onHoverChat,
   pinnedChatIds,
+  loadingChatId,
   onPin,
   onDelete,
 }: CategorySectionProps) {
@@ -85,6 +87,7 @@ export default function CategorySection({
               isActive={activeChatId === chat.id}
               isHovered={hoveredChatId === chat.id}
               isPinned={pinnedChatIds.has(chat.id)}
+              isLoading={loadingChatId === chat.id}
               onHover={onHoverChat}
               onPin={onPin}
               onDelete={onDelete}

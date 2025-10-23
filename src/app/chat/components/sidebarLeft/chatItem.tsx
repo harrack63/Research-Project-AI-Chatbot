@@ -1,9 +1,13 @@
+
+import { Loader } from 'lucide-react';
+
 type ChatItemProps = {
   id: string;
   chatname: string;
   isActive: boolean;
   isHovered: boolean;
   isPinned: boolean;
+  isLoading?: boolean;
   onHover: (id: string | null) => void;
   onPin: (e: React.MouseEvent, chatId: string, category: string) => void;
   onDelete: (
@@ -21,6 +25,7 @@ export default function ChatItem({
   isActive,
   isHovered,
   isPinned,
+  isLoading,
   onHover,
   onPin,
   onDelete,
@@ -44,6 +49,12 @@ export default function ChatItem({
       >
         <p className="truncate font-medium text-sm">{chatname}</p>
       </button>
+      
+      {isLoading && (
+        <div className="absolute left-3 top-1/2 -translate-y-1/2">
+          <Loader className="w-3 h-3 animate-spin text-blue-400" />
+        </div>
+      )}
 
       {isHovered && (
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex gap-1">

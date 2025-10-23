@@ -8,7 +8,6 @@ import { createNewChat } from '~/lib/chatStore';
 export function useChat(currentChatId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingInput, setPendingInput] = useState<string>('');
   const router = useRouter();
 
   const addMessage = useCallback((message: Message) => {
@@ -30,14 +29,6 @@ export function useChat(currentChatId?: string) {
 
   const processMessage = useCallback(
     async (userInput: string) => {
-      const userMessage: Message = {
-        id: `user-${Date.now()}`,
-        role: 'user',
-        content: userInput,
-        timestamp: new Date(),
-      };
-      addMessage(userMessage);
-
       setIsLoading(true);
 
       const assistantMessage: Message = {
@@ -49,7 +40,7 @@ export function useChat(currentChatId?: string) {
       addMessage(assistantMessage);
 
       try {
-        const response = "Hi, I'm your classic chat bot"; // Get actual response from here, (j function call to take care of the shit)
+        const response = "Hi, I'm your classic chat bot";
         for (let i = 0; i < response.length; i++) {
           await new Promise((resolve) => setTimeout(resolve, 10));
           updateLastMessage(response.substring(0, i + 1));
@@ -68,27 +59,59 @@ export function useChat(currentChatId?: string) {
       if (!userInput.trim()) return;
 
       if (!currentChatId) {
+        // Create new chat
         const userId = "user-temp";
         const newChatId = generateUniqueChatId(userId);
-        createNewChat(newChatId, "New Chat");
-        setPendingInput(userInput);
-        router.push(`/chat/${newChatId}`);
+        const title = userInput.substring(0, 50).split('\n')[0] || "New Chat";
+        createNewChat(newChatId, title);
+        
+        // Force sidebar update
+        window.dispatchEvent(new CustomEvent('chats-updated'));
+        
+        // Navigate with state
+        router.push(`/chat/${newChatId}?firstMessage=${encodeURIComponent(userInput)}`);
         return;
       }
 
+      // Add user message
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: userInput,
+        timestamp: new Date(),
+      };
+      addMessage(userMessage);
+
+      // Process bot response
       await processMessage(userInput);
     },
-    [currentChatId, router, processMessage]
+    [currentChatId, router, processMessage, addMessage]
   );
 
-  // Process pending message after navigation
+  // Handle first message from URL params
   useEffect(() => {
-    if (currentChatId && pendingInput) {
-      const input = pendingInput;
-      setPendingInput('');
-      processMessage(input);
+    if (!currentChatId) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const firstMessage = params.get('firstMessage');
+
+    if (firstMessage && messages.length === 0) {
+      // Clear the URL param
+      window.history.replaceState({}, '', `/chat/${currentChatId}`);
+
+      // Add user message
+      const userMessage: Message = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: firstMessage,
+        timestamp: new Date(),
+      };
+      setMessages([userMessage]);
+
+      // Process bot response
+      processMessage(firstMessage);
     }
-  }, [currentChatId, pendingInput, processMessage]);
+  }, [currentChatId, messages.length, processMessage]);
 
   return { messages, isLoading, sendMessage };
 }

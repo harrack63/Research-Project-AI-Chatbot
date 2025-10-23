@@ -5,7 +5,6 @@ import { useChat } from "~/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { useParams } from "next/navigation";
-import { getGlobalChats } from "~/lib/chatStore";
 
 const SCROLL_THRESHOLD = 3000;
 
@@ -17,16 +16,7 @@ export default function ChatArea() {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Load chat title on mount
-  const chatTitle = (() => {
-    if (!chatId) return "New Chat";
-    const chats = getGlobalChats();
-    const chat = chats
-      .flatMap((c) => c.chats)
-      .find((c) => c.id === chatId);
-    return chat?.chatname ?? "New Chat";
-  })();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -52,6 +42,9 @@ export default function ChatArea() {
   }, []);
 
   useKeyboardShortcut("arrowdown", scrollToBottom);
+  useKeyboardShortcut(".", () => {
+    textareaRef.current?.focus();
+  });
 
   const handleSend = async () => {
     if (input.trim()) {
@@ -68,16 +61,11 @@ export default function ChatArea() {
   };
 
   return (
-    <div className="flex-1 flex flex-col relative bg-blue-950 overflow-hidden">
-      {/* Title Bar */}
-      <div className="px-6 py-4 border-b border-slate-700 bg-blue-950">
-        <h2 className="text-sm font-semibold text-white">{chatTitle}</h2>
-      </div>
-
+    <div className="flex-1 flex flex-col relative bg-linear-to-b bg-slate-800 overflow-hidden">
       {/* Scroll container */}
       <div
         ref={scrollContainerRef}
-        className="absolute inset-0 top-16 overflow-y-auto overflow-x-hidden"
+        className="absolute inset-0 top-4 overflow-y-auto overflow-x-hidden"
       >
         {/* Messages wrapper - centered with max width */}
         <div className="flex flex-col min-h-full px-6 pt-12 pb-80">
@@ -120,15 +108,16 @@ export default function ChatArea() {
       )}
 
       {/* Fixed input area at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 bg-blue-950 pt-8 pb-6 px-6 z-10">
+      <div className="absolute bottom-0 left-0 right-0 pt-8 pb-6 px-6 z-10">
         <div className="flex gap-3 max-w-2xl mx-auto relative">
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type your prompt to the bot..."
             rows={3}
-            className="flex-1 bg-slate-800 border border-slate-700 text-white placeholder-slate-500 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-500 resize-none"
+            className="flex-1 bg-linear-to-b from-slate-900 to-slate-950 border border-slate-950 text-white placeholder-zinc-500 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-900 resize-none"
           />
           <button
             onClick={handleSend}

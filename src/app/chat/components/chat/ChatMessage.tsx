@@ -1,7 +1,9 @@
 import type { Message } from '~/lib/types';
+import { Loader } from 'lucide-react';
 
 type ChatMessageProps = {
   message: Message;
+  isLoading?: boolean;
 };
 
 export default function ChatMessage({ message }: ChatMessageProps) {

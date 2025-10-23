@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import type { ChatCategory } from "~/lib/types";
-import { setGlobalChats } from "~/lib/chatStore";
+import { getGlobalChats, setGlobalChats } from "~/lib/chatStore";
 import CollapsedSidebar from "./collapsedSidebar";
 import SearchModal from "./searchModel";
 import CategorySection from "./categorySection";
@@ -24,6 +24,20 @@ const mockChats: ChatCategory[] = [
         label: "Pinned",
         chatname: "NextJS + FastAPI - RA",
         date: new Date(),
+        images: [
+          {
+            id: "1",
+            url: "https://picsum.photos/400/300?random=1",
+            title: "Chest X-Ray",
+            description: "Patient chest X-ray showing clear lungs with no abnormalities detected.",
+          },
+          {
+            id: "2",
+            url: "https://picsum.photos/400/300?random=2",
+            title: "MRI Scan",
+            description: "Brain MRI scan results indicating normal brain structure.",
+          },
+        ],
       },
       {
         id: "2",
@@ -41,6 +55,20 @@ const mockChats: ChatCategory[] = [
         label: "Today",
         chatname: "NextJS + FastAPI - RA",
         date: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        images: [
+          {
+            id: "1",
+            url: "https://picsum.photos/400/300?random=1",
+            title: "Chest X-Ray",
+            description: "Patient chest X-ray showing clear lungs with no abnormalities detected.",
+          },
+          {
+            id: "2",
+            url: "https://picsum.photos/400/300?random=2",
+            title: "MRI Scan",
+            description: "Brain MRI scan results indicating normal brain structure.",
+          },
+        ],
       },
     ],
   },
@@ -63,6 +91,20 @@ const mockChats: ChatCategory[] = [
         label: "Last 7 Days",
         chatname: "Drift Hello World App - $200 f ...",
         date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+        images: [
+          {
+            id: "1",
+            url: "https://picsum.photos/400/300?random=1",
+            title: "Chest X-Ray",
+            description: "Patient chest X-ray showing clear lungs with no abnormalities detected.",
+          },
+          {
+            id: "2",
+            url: "https://picsum.photos/400/300?random=2",
+            title: "MRI Scan",
+            description: "Brain MRI scan results indicating normal brain structure.",
+          },
+        ],
       },
     ],
   },
@@ -108,10 +150,19 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   const [pinnedChatIds, setPinnedChatIds] = useState<Set<string>>(
     new Set(mockChats[0].chats.map((c) => c.id))
   );
+  const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
 
   useEffect(() => {
     setGlobalChats(chats);
   }, [chats]);
+  useEffect(() => {
+    const handleChatsUpdate = () => {
+      setChats([...getGlobalChats()]);
+    };
+
+    window.addEventListener('chats-updated', handleChatsUpdate);
+    return () => window.removeEventListener('chats-updated', handleChatsUpdate);
+  }, []);
 
   const stableToggle = useCallback(() => {
     onToggle();
@@ -336,6 +387,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
               hoveredChatId={hoveredChatId}
               onHoverChat={setHoveredChatId}
               pinnedChatIds={pinnedChatIds}
+              loadingChatId={loadingChatId}
               onPin={handlePin}
               onDelete={handleDeleteClick}
             />

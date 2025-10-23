@@ -15,7 +15,17 @@ export default function HomePage() {
   const toggleRight = () => {
     setShowRight((p) => {
       const newValue = !p;
-      if (newValue) setShowLeft(false);
+      if (newValue) {
+        // Only auto-collapse if there's not enough space
+        const availableSpace = window.innerWidth - rightWidth;
+        const minSpaceNeeded = 768; // chat area + sidebar width
+        if (availableSpace < minSpaceNeeded) {
+          setShowLeft(false);
+        }
+      } else {
+        // When closing right sidebar, re-open left if there's space
+        setShowLeft(true);
+       }
       return newValue;
     });
   };
@@ -23,15 +33,22 @@ export default function HomePage() {
   const params = useParams();
   const chatId = (params?.id as string) || "";
 
-  const handleRightWidthChange = useCallback((newWidth: number) => {
-    setRightWidth(newWidth);
-    
-    // Check if we need to auto-collapse left sidebar
-    const mainWidth = window.innerWidth - newWidth;
-    if (mainWidth < 768 && showRight) {
-      setShowLeft(false);
-    }
-  }, [showRight]);
+  const handleRightWidthChange = useCallback(
+    (newWidth: number) => {
+      setRightWidth(newWidth);
+
+      // Check if we need to auto-collapse left sidebar
+      const mainWidth = window.innerWidth - newWidth;
+      const minSpaceNeeded = 768;
+      if (mainWidth < 768 && showRight) {
+        setShowLeft(false);
+      } else if (mainWidth >= minSpaceNeeded && !showLeft) {
+        // Only auto-expand if there's enough space (256px = sidebar width)
+        setShowLeft(true);
+      }
+    },
+    [showLeft, showRight]
+  );
 
   useKeyboardShortcut("l", toggleRight);
 
