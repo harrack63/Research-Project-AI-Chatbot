@@ -6,12 +6,13 @@ import ChatArea from "~/app/chat/components/chat/ChatArea";
 import { useParams, useRouter } from "next/navigation";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { getGlobalChats } from "~/lib/chatStore";
+import { getCurrentUser, isAuthenticated } from "~/lib/auth";
 
 export default function HomePage() {
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(false);
   const [hasImages, setHasImages] = useState(false);
-  const [firstResponseReceived, setFirstResponseReceived] = useState(false);
+  const [firstResponseReceived] = useState(false);
   const [rightWidth, setRightWidth] = useState(400);
 
   const toggleLeft = () => setShowLeft((p) => !p);
@@ -35,6 +36,7 @@ export default function HomePage() {
 
   const params = useParams();
   const router = useRouter();
+  const [isReady, setIsReady] = useState(false);
   const chatId = (params?.id as string) || "";
 
   const handleRightWidthChange = useCallback(
@@ -90,6 +92,33 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [chatId, firstResponseReceived, showRight]);
 
+  
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace("/login");
+      return;
+    }
+
+    // Optionally sync user data with backend
+    getCurrentUser().then((result) => {
+      if (result.isErr()) {
+        router.replace("/login");
+        return;
+      }
+    }).finally(() => {
+      setIsReady(true);
+    });
+  }, [router]);
+
+  if (!isReady) {
+    return (
+      <div className="flex items-center justify-center min-h-screen 
+        bg-blue-950">
+        <div className="animate-spin rounded-full h-12 w-12 
+          border-t-2 border-b-2 border-blue-500" />
+      </div>
+    );
+  }
   
   return (
     <div className="flex min-h-screen bg-blue-950">
