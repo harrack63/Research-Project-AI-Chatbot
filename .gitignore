@@ -32,3 +32,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# backend
+/src/utils/
+/.venv/
+/corpus/
+/patient_cases/
+/prompts/

@@ -1,9 +1,11 @@
 // hooks/useChat.ts
-import { useState, useCallback, useEffect, useRef } from 'react';
-import type { Message } from '~/lib/types';
-import { useRouter } from 'next/navigation';
-import { generateUniqueChatId } from '~/lib/chatUtils';
-import { createNewChat } from '~/lib/chatStore';
+import { useState, useCallback, useEffect, useRef } from "react";
+import type { Message } from "~/lib/types";
+import { useRouter } from "next/navigation";
+import { generateUniqueChatId } from "~/lib/chatUtils";
+import { createNewChat } from "~/lib/chatStore";
+import { z } from 'zod';
+import { sendChatMessage } from "~/utils/utils";
 
 export function useChat(currentChatId?: string) {
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -28,6 +30,16 @@ export function useChat(currentChatId?: string) {
     });
   }, []);
 
+  // Process Message Schemas
+  const MessageSchema = z.object({
+    role: z.enum(["user", "assistant"]),
+    content: z.string(),
+  });
+
+  const ChatResponseSchema = z.object({
+    messages: z.array(MessageSchema).optional(),
+  });
+
   const processMessage = useCallback(
     async (userInput: string) => {
       setIsLoading(true);
@@ -41,18 +53,37 @@ export function useChat(currentChatId?: string) {
       addMessage(assistantMessage);
 
       try {
-        const response = "Hi, I'm your classic chat bot";
-        for (let i = 0; i < response.length; i++) {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          updateLastMessage(response.substring(0, i + 1));
+        const chatResponse = await sendChatMessage([
+          ...messages,
+          { role: 'user', content: userInput },
+        ]);
+
+        // Validate response with Zod
+        const validatedResponse = ChatResponseSchema.parse(chatResponse);
+        const lastMessage = validatedResponse.messages?.[
+          validatedResponse.messages.length - 1
+        ];
+
+        if (lastMessage && lastMessage.role === 'assistant') {
+          updateLastMessage(lastMessage.content);
+        } else {
+          updateLastMessage('Sorry, something went wrong with the message.');
         }
       } catch (error) {
-        console.error('Error sending message:', error);
+        if (error instanceof z.ZodError) {
+          console.error('Invalid response format:', error);
+          updateLastMessage(
+            'There was an error processing the response.'
+          );
+        } else {
+          console.error('Error sending message:', error);
+          updateLastMessage('There was an error contacting the server.');
+        }
       } finally {
         setIsLoading(false);
       }
     },
-    [addMessage, updateLastMessage]
+    [ChatResponseSchema, addMessage, messages, updateLastMessage]
   );
 
   const sendMessage = useCallback(
@@ -63,21 +94,23 @@ export function useChat(currentChatId?: string) {
         // Create new chat
         const userId = "user-temp";
         const newChatId = generateUniqueChatId(userId);
-        const title = userInput.substring(0, 50).split('\n')[0] || "New Chat";
+        const title = userInput.substring(0, 50).split("\n")[0] || "New Chat";
         createNewChat(newChatId, title);
-        
+
         // Force sidebar update
-        window.dispatchEvent(new CustomEvent('chats-updated'));
-        
+        window.dispatchEvent(new CustomEvent("chats-updated"));
+
         // Navigate with state
-        router.push(`/chat/${newChatId}?firstMessage=${encodeURIComponent(userInput)}`);
+        router.push(
+          `/chat/${newChatId}?firstMessage=${encodeURIComponent(userInput)}`
+        );
         return;
       }
 
       // Add user message
       const userMessage: Message = {
         id: `user-${Date.now()}`,
-        role: 'user',
+        role: "user",
         content: userInput,
         timestamp: new Date(),
       };
@@ -98,16 +131,16 @@ export function useChat(currentChatId?: string) {
     if (!currentChatId) return;
 
     const params = new URLSearchParams(window.location.search);
-    const firstMessage = params.get('firstMessage');
+    const firstMessage = params.get("firstMessage");
 
     if (firstMessage && messages.length === 0) {
       // Clear the URL param
-      window.history.replaceState({}, '', `/chat/${currentChatId}`);
+      window.history.replaceState({}, "", `/chat/${currentChatId}`);
 
       // Add user message
       const userMessage: Message = {
         id: `user-${Date.now()}`,
-        role: 'user',
+        role: "user",
         content: firstMessage,
         timestamp: new Date(),
       };
