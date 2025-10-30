@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import type { ChatCategory } from "~/lib/types";
 import { getGlobalChats, setGlobalChats } from "~/lib/chatStore";
@@ -9,6 +10,7 @@ import SearchModal from "./searchModel";
 import CategorySection from "./categorySection";
 import DeleteModal from "./deleteModel";
 import { useParams, useRouter } from "next/navigation";
+import LogoutModal from "./logoutModel";
 
 type SidebarLeftProps = {
   isOpen: boolean;
@@ -29,13 +31,15 @@ const mockChats: ChatCategory[] = [
             id: "1",
             url: "https://picsum.photos/400/300?random=1",
             title: "Chest X-Ray",
-            description: "Patient chest X-ray showing clear lungs with no abnormalities detected.",
+            description:
+              "Patient chest X-ray showing clear lungs with no abnormalities detected.",
           },
           {
             id: "2",
             url: "https://picsum.photos/400/300?random=2",
             title: "MRI Scan",
-            description: "Brain MRI scan results indicating normal brain structure.",
+            description:
+              "Brain MRI scan results indicating normal brain structure.",
           },
         ],
       },
@@ -60,13 +64,15 @@ const mockChats: ChatCategory[] = [
             id: "1",
             url: "https://picsum.photos/400/300?random=1",
             title: "Chest X-Ray",
-            description: "Patient chest X-ray showing clear lungs with no abnormalities detected.",
+            description:
+              "Patient chest X-ray showing clear lungs with no abnormalities detected.",
           },
           {
             id: "2",
             url: "https://picsum.photos/400/300?random=2",
             title: "MRI Scan",
-            description: "Brain MRI scan results indicating normal brain structure.",
+            description:
+              "Brain MRI scan results indicating normal brain structure.",
           },
         ],
       },
@@ -96,13 +102,15 @@ const mockChats: ChatCategory[] = [
             id: "1",
             url: "https://picsum.photos/400/300?random=1",
             title: "Chest X-Ray",
-            description: "Patient chest X-ray showing clear lungs with no abnormalities detected.",
+            description:
+              "Patient chest X-ray showing clear lungs with no abnormalities detected.",
           },
           {
             id: "2",
             url: "https://picsum.photos/400/300?random=2",
             title: "MRI Scan",
-            description: "Brain MRI scan results indicating normal brain structure.",
+            description:
+              "Brain MRI scan results indicating normal brain structure.",
           },
         ],
       },
@@ -130,6 +138,8 @@ function getCategoryFromDate(date: Date): string {
 export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   const params = useParams();
   const router = useRouter();
+  const { signOut } = useAuth();
+  const { user } = useUser();
   const activeChatId = params?.id as string | null;
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<
@@ -147,6 +157,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     chatname: "",
   });
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [chats, setChats] = useState<ChatCategory[]>(mockChats);
   const [pinnedChatIds, setPinnedChatIds] = useState<Set<string>>(
     new Set(mockChats[0].chats.map((c) => c.id))
@@ -156,22 +167,28 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   useEffect(() => {
     setGlobalChats(chats);
   }, [chats]);
+
   useEffect(() => {
     const handleChatsUpdate = () => {
       setChats([...getGlobalChats()]);
     };
 
-    window.addEventListener('chats-updated', handleChatsUpdate);
-    return () => window.removeEventListener('chats-updated', handleChatsUpdate);
+    window.addEventListener("chats-updated", handleChatsUpdate);
+    return () => window.removeEventListener("chats-updated", handleChatsUpdate);
   }, []);
 
   const stableToggle = useCallback(() => {
     onToggle();
   }, [onToggle]);
-  
+
   const handleNewChat = useCallback(() => {
-     window.location.href = `/chat`;
-   }, []);
+    window.location.href = `/chat`;
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    await signOut();
+    router.push("/sign-in");
+  }, [signOut, router]);
 
   useKeyboardShortcut("j", stableToggle);
   useKeyboardShortcut("k", handleNewChat);
@@ -240,8 +257,8 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     setDeletePrompt({ isOpen: false, chatId: null, chatname: "" });
 
     if (activeChatId === chatId) {
-    router.push('/chat');
-  }
+      router.push("/chat");
+    }
   };
 
   const handlePin = (e: React.MouseEvent, chatId: string) => {
@@ -298,6 +315,15 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     });
   };
 
+  const userInitials =
+    user && user.firstName && user.lastName
+      ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
+      : user?.firstName
+        ? user.firstName[0].toUpperCase()
+        : "U";
+
+  const userName = user?.firstName || "User";
+
   if (!isOpen) {
     return (
       <>
@@ -320,7 +346,9 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         {/* Header */}
         <div className="p-3 border-b border-slate-800 flex items-center justify-between gap-2 mt-1 ml-1">
           <div className="text-center flex-1">
-            <h1 className="text-xs font-bold text-white leading-tight">Logo</h1>
+            <h1 className="text-xs font-bold text-white leading-tight">
+              Logo
+            </h1>
           </div>
           <button
             onClick={stableToggle}
@@ -346,9 +374,9 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         {/* New Chat Button */}
         <div className="px-3 py-2">
           <button
-           onClick={handleNewChat}
-           className="w-full py-1.5 px-3 bg-linear-to-r from-blue-600 to-emerald-600 hover:opacity-90 text-white font-semibold rounded text-xs transition-all duration-200 border border-blue-500"
-         >
+            onClick={handleNewChat}
+            className="w-full py-1.5 px-3 bg-linear-to-r from-blue-600 to-emerald-600 hover:opacity-90 text-white font-semibold rounded text-xs transition-all duration-200 border border-blue-500"
+          >
             New Chat
           </button>
         </div>
@@ -399,17 +427,20 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
           ))}
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-slate-800 p-2 shrink-0">
-          <button className="flex items-center gap-2 w-full px-2 py-1.5 rounded hover:bg-slate-800 transition-colors text-xs text-slate-400">
-            <svg
-              className="w-3.5 h-3.5"
-              fill="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-            </svg>
-            <span className="text-xs">Pro</span>
+        {/* Footer - User Profile */}
+        <div className="border-t border-slate-800 p-3 shrink-0">
+          <button
+            onClick={() => setShowLogoutModal(true)}
+            className="flex items-center gap-3 w-full px-2 py-2 rounded hover:bg-slate-800 transition-colors"
+          >
+            <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-400 to-slate-600 flex items-center justify-center shrink-0">
+              <span className="text-xs font-semibold text-white">
+                {userInitials}
+              </span>
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-xs font-medium text-white">{userName}</p>
+            </div>
           </button>
         </div>
       </aside>
@@ -431,6 +462,13 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
         chats={chats}
+      />
+
+      <LogoutModal
+        isOpen={showLogoutModal}
+        userName={userName}
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutModal(false)}
       />
     </>
   );
