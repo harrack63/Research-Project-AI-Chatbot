@@ -16,6 +16,13 @@ type SidebarRightProps = {
   onWidthChange: (width: number) => void;
 };
 
+function loadImagesForChat(chatId: string | undefined): ChatImage[] {
+  if (!chatId) return [];
+  const chats = getGlobalChats();
+  const chat = chats.flatMap((c) => c.chats).find((c) => c.id === chatId);
+  return chat?.images || [];
+}
+
 export default function SidebarRight({
   isOpen,
   onToggle,
@@ -27,12 +34,25 @@ export default function SidebarRight({
   const params = useParams();
   const chatId = params?.id as string | undefined;
 
-  const images = (() => {
-    if (!chatId) return [];
-    const chats = getGlobalChats();
-    const chat = chats.flatMap((c) => c.chats).find((c) => c.id === chatId);
-    return chat?.images || [];
-  })();
+  // Initialize images with lazy initializer
+  const [images, setImages] = useState<ChatImage[]>(() =>
+    loadImagesForChat(chatId)
+  );
+
+  // Update images when chatId changes
+  useEffect(() => {
+    setImages(loadImagesForChat(chatId));
+  }, [chatId]);
+
+  // Listen for global chat updates (when new images are added via backend)
+  useEffect(() => {
+    const handleChatsUpdate = () => {
+      setImages(loadImagesForChat(chatId));
+    };
+
+    window.addEventListener("chats-updated", handleChatsUpdate);
+    return () => window.removeEventListener("chats-updated", handleChatsUpdate);
+  }, [chatId]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -69,9 +89,7 @@ export default function SidebarRight({
     <>
       {/* Drag handle when sidebar is closed */}
       {showDragHandle && (
-        <div
-          className="fixed right-2 top-4 z-40"
-        >
+        <div className="fixed right-2 top-4 z-40">
           <button
             onClick={(e) => {
               e.preventDefault();
@@ -124,7 +142,9 @@ export default function SidebarRight({
           <div className="flex-1 overflow-y-auto p-4">
             {images.length === 0 ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-slate-500 text-sm">No images for this chat</p>
+                <p className="text-slate-500 text-sm">
+                  No images for this chat
+                </p>
               </div>
             ) : (
               <div
@@ -133,7 +153,7 @@ export default function SidebarRight({
                 }`}
               >
                 {images.map((image) => (
-                 <button
+                  <button
                     key={image.id}
                     onClick={() => setSelectedImage(image)}
                     className="group relative overflow-hidden rounded-lg border border-slate-700 hover:border-blue-500 transition-all aspect-square"
