@@ -11,6 +11,7 @@ import CategorySection from "./categorySection";
 import DeleteModal from "./deleteModel";
 import { useParams, useRouter } from "next/navigation";
 import LogoutModal from "./logoutModel";
+import Image from "next/image";
 
 type SidebarLeftProps = {
   isOpen: boolean;
@@ -319,8 +320,8 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     user && user.firstName && user.lastName
       ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
       : user?.firstName
-        ? user.firstName[0].toUpperCase()
-        : "U";
+      ? user.firstName[0].toUpperCase()
+      : "U";
 
   const userName = user?.firstName || "User";
 
@@ -345,10 +346,15 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
       <aside className="h-screen bg-linear-to-b from-slate-900 to-slate-950 text-white flex flex-col border-r border-slate-800 w-64 z-40">
         {/* Header */}
         <div className="p-3 border-b border-slate-800 flex items-center justify-between gap-2 mt-1 ml-1">
-          <div className="text-center flex-1">
-            <h1 className="text-xs font-bold text-white leading-tight">
-              Logo
-            </h1>
+          <div className="flex-1 flex items-center gap-2 justify-center">
+            <Image
+              src="/favicon.png"
+              alt="Healthbot"
+              width = {24}
+              height = {24}
+              className="rounded"
+            />
+            <h1 className="text-sm font-bold text-white">Healthbot</h1>
           </div>
           <button
             onClick={stableToggle}

@@ -36,8 +36,6 @@ yarn-error.log*
 next-env.d.ts
 
 # backend
-/src/utils/
-/.venv/
 /corpus/
 /patient_cases/
 /prompts/
