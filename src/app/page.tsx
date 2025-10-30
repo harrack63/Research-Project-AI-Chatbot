@@ -1,11 +1,27 @@
-'use client';
+// app/page.tsx
+"use client";
 
-// import { useEffect } from 'react';
-// import { useRouter } from 'next/navigation';
+import { useAuthStatus } from "~/hooks/useAuth";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
-export default function ChatPage() {
-//   const router = useRouter();
+export default function HomePage() {
+  const { isAuthenticated, isLoaded } = useAuthStatus();
+  const router = useRouter();
 
-  // This page acts as a placeholder - actual routing happens in ChatArea
-  return null;
+  useEffect(() => {
+    if (isLoaded) {
+      if (isAuthenticated) {
+        router.replace("/chat");
+      } else {
+        router.replace("/sign-in");
+      }
+    }
+  }, [isLoaded, isAuthenticated, router]);
+
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-linear-to-br from-blue-900 to-blue-950">
+      <div className="text-white">Loading...</div>
+    </div>
+  );
 }
