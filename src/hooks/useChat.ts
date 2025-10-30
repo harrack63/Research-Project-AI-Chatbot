@@ -1,17 +1,43 @@
 // hooks/useChat.ts
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { Message } from "~/lib/types";
+import type { ChatImage, Message } from "~/lib/types";
 import { useRouter } from "next/navigation";
 import { generateUniqueChatId } from "~/lib/chatUtils";
 import { createNewChat } from "~/lib/chatStore";
-import { z } from 'zod';
 import { sendChatMessage } from "~/utils/utils";
+
+const MESSAGES_STORAGE_KEY = "healthbot_messages_";
 
 export function useChat(currentChatId?: string) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [images, setImages] = useState<ChatImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+
+  // Load messages from localStorage on mount
+  useEffect(() => {
+    if (!currentChatId) {
+      setMessages([]);
+      return;
+    }
+
+    try {
+      const stored = localStorage.getItem(
+        `${MESSAGES_STORAGE_KEY}${currentChatId}`
+      );
+      if (stored) {
+        const parsedMessages = JSON.parse(stored).map((msg: Message) => ({
+          ...msg,
+          timestamp: new Date(msg.timestamp),
+        }));
+        setMessages(parsedMessages);
+      }
+    } catch (error) {
+      console.error("Failed to load messages:", error);
+      setMessages([]);
+    }
+  }, [currentChatId]);
 
   const addMessage = useCallback((message: Message) => {
     setMessages((prev) => [...prev, message]);
@@ -30,24 +56,14 @@ export function useChat(currentChatId?: string) {
     });
   }, []);
 
-  // Process Message Schemas
-  const MessageSchema = z.object({
-    role: z.enum(["user", "assistant"]),
-    content: z.string(),
-  });
-
-  const ChatResponseSchema = z.object({
-    messages: z.array(MessageSchema).optional(),
-  });
-
   const processMessage = useCallback(
     async (userInput: string) => {
       setIsLoading(true);
 
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content: '',
+        role: "assistant",
+        content: "",
         timestamp: new Date(),
       };
       addMessage(assistantMessage);
@@ -55,35 +71,31 @@ export function useChat(currentChatId?: string) {
       try {
         const chatResponse = await sendChatMessage([
           ...messages,
-          { role: 'user', content: userInput },
+          { role: "user", content: userInput, id: `user-${Date.now()}`, timestamp: new Date() },
         ]);
 
-        // Validate response with Zod
-        const validatedResponse = ChatResponseSchema.parse(chatResponse);
-        const lastMessage = validatedResponse.messages?.[
-          validatedResponse.messages.length - 1
+        const lastMessage = chatResponse.messages?.[
+          chatResponse.messages.length - 1
         ];
 
-        if (lastMessage && lastMessage.role === 'assistant') {
+        if (lastMessage && lastMessage.role === "assistant") {
           updateLastMessage(lastMessage.content);
         } else {
-          updateLastMessage('Sorry, something went wrong with the message.');
+          updateLastMessage("Sorry, something went wrong with the message.");
+        }
+
+        // Add images if any
+        if (chatResponse.images && chatResponse.images.length > 0) {
+          setImages((prev) => [...prev, ...chatResponse.images]);
         }
       } catch (error) {
-        if (error instanceof z.ZodError) {
-          console.error('Invalid response format:', error);
-          updateLastMessage(
-            'There was an error processing the response.'
-          );
-        } else {
-          console.error('Error sending message:', error);
-          updateLastMessage('There was an error contacting the server.');
-        }
+        console.error("Error sending message:", error);
+        updateLastMessage("There was an error contacting the server.");
       } finally {
         setIsLoading(false);
       }
     },
-    [ChatResponseSchema, addMessage, messages, updateLastMessage]
+    [addMessage, messages, updateLastMessage]
   );
 
   const sendMessage = useCallback(
@@ -151,5 +163,5 @@ export function useChat(currentChatId?: string) {
     }
   }, [currentChatId, messages.length, processMessage]);
 
-  return { messages, isLoading, sendMessage, stopResponse };
+  return { messages, images, isLoading, sendMessage, stopResponse };
 }

@@ -1,16 +1,50 @@
-import type { ChatCategory } from "~/lib/types";
+// lib/chatStore.ts
+import type { ChatCategory, ChatImage } from "~/lib/types";
+
+const STORAGE_KEY = "healthbot_chats";
 
 let globalChats: ChatCategory[] = [];
 
-export function setGlobalChats(chats: ChatCategory[]) {
-  globalChats = chats;
+export function loadChats(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      globalChats = JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error("Failed to load chats:", error);
+    globalChats = [];
+  }
 }
 
-export function getGlobalChats() {
+export function saveChats(): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(globalChats));
+  } catch (error) {
+    console.error("Failed to save chats:", error);
+  }
+}
+
+export function setGlobalChats(chats: ChatCategory[]): void {
+  globalChats = chats;
+  saveChats();
+}
+
+export function getGlobalChats(): ChatCategory[] {
+  if (globalChats.length === 0) {
+    loadChats();
+  }
   return globalChats;
 }
 
-export function createNewChat(chatId: string, title: string = "New Chat"): void {
+export function createNewChat(
+  chatId: string,
+  title: string = "New Chat"
+): void {
   const today = "Today";
   const todayCategory = globalChats.find((c) => c.label === today);
 
@@ -34,4 +68,26 @@ export function createNewChat(chatId: string, title: string = "New Chat"): void 
       ],
     });
   }
+  saveChats();
+}
+
+export function updateChatImages(
+  chatId: string | undefined,
+  newImages: ChatImage[]
+): void {
+  if (!chatId) return;
+
+  globalChats = globalChats.map((category) => ({
+    ...category,
+    chats: category.chats.map((chat) => {
+      if (chat.id === chatId) {
+        return {
+          ...chat,
+          images: [...(chat.images || []), ...newImages],
+        };
+      }
+      return chat;
+    }),
+  }));
+  saveChats();
 }

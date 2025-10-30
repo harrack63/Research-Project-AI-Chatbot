@@ -1,4 +1,5 @@
 // utils/utils.ts
+import { ChatResponse } from "~/lib/types";
 import { getAuthToken } from "./auth";
 import { z } from "zod";
 
@@ -25,7 +26,7 @@ export function getBackendUrl(): string {
  */
 export async function sendChatMessage(
   messages: Array<{ role: "user" | "assistant"; content: string }>
-): Promise<{ messages?: Array<{ role: string; content: string }> }> {
+): Promise<ChatResponse> {
   const backendUrl = getBackendUrl();
   const token = await getAuthToken();
 
@@ -48,7 +49,6 @@ export async function sendChatMessage(
   if (!response.ok) {
     if (response.status === 401) {
       window.location.href = "/sign-in";
-      return {};
     }
     throw new Error(
       `Backend error: ${response.status} ${response.statusText}`

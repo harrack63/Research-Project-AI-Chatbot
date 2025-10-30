@@ -5,7 +5,7 @@ import SidebarRight from "~/app/chat/components/sidebarRight/SidebarRight";
 import ChatArea from "~/app/chat/components/chat/ChatArea";
 import { useParams, useRouter } from "next/navigation";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
-import { getGlobalChats } from "~/lib/chatStore";
+import { getGlobalChats, loadChats } from "~/lib/chatStore";
 
 export default function HomePage() {
   const [showLeft, setShowLeft] = useState(true);
@@ -89,6 +89,9 @@ export default function HomePage() {
     const interval = setInterval(checkImages, 500);
     return () => clearInterval(interval);
   }, [chatId, firstResponseReceived, showRight]);
+  useEffect(() => {
+    loadChats();
+  }, []);
 
   
   return (

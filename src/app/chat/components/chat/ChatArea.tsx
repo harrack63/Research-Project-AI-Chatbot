@@ -6,7 +6,6 @@ import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { useParams } from "next/navigation";
 
-
 const SCROLL_THRESHOLD = 3000;
 
 type ChatAreaProps = {

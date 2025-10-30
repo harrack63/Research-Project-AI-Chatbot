@@ -1,10 +1,11 @@
+// app/chat/components/sidebarLeft/SidebarLeft.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth, useUser } from "@clerk/nextjs";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import type { ChatCategory } from "~/lib/types";
-import { getGlobalChats, setGlobalChats } from "~/lib/chatStore";
+import { getGlobalChats, setGlobalChats, loadChats } from "~/lib/chatStore";
 import CollapsedSidebar from "./collapsedSidebar";
 import SearchModal from "./searchModel";
 import CategorySection from "./categorySection";
@@ -17,107 +18,6 @@ type SidebarLeftProps = {
   isOpen: boolean;
   onToggle: () => void;
 };
-
-const mockChats: ChatCategory[] = [
-  {
-    label: "Pinned",
-    chats: [
-      {
-        id: "1",
-        label: "Pinned",
-        chatname: "NextJS + FastAPI - RA",
-        date: new Date(),
-        images: [
-          {
-            id: "1",
-            url: "https://picsum.photos/400/300?random=1",
-            title: "Chest X-Ray",
-            description:
-              "Patient chest X-ray showing clear lungs with no abnormalities detected.",
-          },
-          {
-            id: "2",
-            url: "https://picsum.photos/400/300?random=2",
-            title: "MRI Scan",
-            description:
-              "Brain MRI scan results indicating normal brain structure.",
-          },
-        ],
-      },
-      {
-        id: "2",
-        label: "Pinned",
-        chatname: "Bioinformatics analysis - RA",
-        date: new Date(),
-      },
-    ],
-  },
-  {
-    label: "Today",
-    chats: [
-      {
-        id: "5",
-        label: "Today",
-        chatname: "NextJS + FastAPI - RA",
-        date: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        images: [
-          {
-            id: "1",
-            url: "https://picsum.photos/400/300?random=1",
-            title: "Chest X-Ray",
-            description:
-              "Patient chest X-ray showing clear lungs with no abnormalities detected.",
-          },
-          {
-            id: "2",
-            url: "https://picsum.photos/400/300?random=2",
-            title: "MRI Scan",
-            description:
-              "Brain MRI scan results indicating normal brain structure.",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Yesterday",
-    chats: [
-      {
-        id: "6",
-        label: "Yesterday",
-        chatname: "R script for finalizing gene cou ...",
-        date: new Date(Date.now() - 24 * 60 * 60 * 1000),
-      },
-    ],
-  },
-  {
-    label: "Last 7 Days",
-    chats: [
-      {
-        id: "7",
-        label: "Last 7 Days",
-        chatname: "Drift Hello World App - $200 f ...",
-        date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
-        images: [
-          {
-            id: "1",
-            url: "https://picsum.photos/400/300?random=1",
-            title: "Chest X-Ray",
-            description:
-              "Patient chest X-ray showing clear lungs with no abnormalities detected.",
-          },
-          {
-            id: "2",
-            url: "https://picsum.photos/400/300?random=2",
-            title: "MRI Scan",
-            description:
-              "Brain MRI scan results indicating normal brain structure.",
-          },
-        ],
-      },
-    ],
-  },
-];
 
 type DeletePromptState = {
   isOpen: boolean;
@@ -134,6 +34,17 @@ function getCategoryFromDate(date: Date): string {
   if (diffDays < 2) return "Yesterday";
   if (diffDays < 7) return "Last 7 Days";
   return "Older";
+}
+
+function initializeChats() {
+  loadChats();
+  const loadedChats = getGlobalChats();
+  return loadedChats;
+}
+
+function initializePinnedIds(chats: ChatCategory[]): Set<string> {
+  const pinnedSection = chats.find((c) => c.label === "Pinned");
+  return new Set(pinnedSection?.chats.map((c) => c.id) || []);
 }
 
 export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
@@ -159,19 +70,23 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   });
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [chats, setChats] = useState<ChatCategory[]>(mockChats);
-  const [pinnedChatIds, setPinnedChatIds] = useState<Set<string>>(
-    new Set(mockChats[0].chats.map((c) => c.id))
+  const [chats, setChats] = useState(() => initializeChats());
+  const [pinnedChatIds, setPinnedChatIds] = useState(() => 
+    initializePinnedIds(getGlobalChats())
   );
-  const [loadingChatId, setLoadingChatId] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
+  // Sync chats to localStorage
   useEffect(() => {
-    setGlobalChats(chats);
-  }, [chats]);
+    if (isLoaded) {
+      setGlobalChats(chats);
+    }
+  }, [chats, isLoaded]);
 
   useEffect(() => {
     const handleChatsUpdate = () => {
-      setChats([...getGlobalChats()]);
+      const updated = getGlobalChats();
+      setChats([...updated]);
     };
 
     window.addEventListener("chats-updated", handleChatsUpdate);
@@ -183,8 +98,8 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   }, [onToggle]);
 
   const handleNewChat = useCallback(() => {
-    window.location.href = `/chat`;
-  }, []);
+    router.push("/chat");
+  }, [router]);
 
   const handleLogout = useCallback(async () => {
     await signOut();
@@ -278,7 +193,6 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
       }));
 
       if (isPinned) {
-        // Unpin: move to category based on date
         const newCategory = getCategoryFromDate(chat.date);
         let targetCategory = newChats.find((c) => c.label === newCategory);
 
@@ -292,7 +206,6 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
           label: newCategory,
         });
       } else {
-        // Pin: move to Pinned section
         const pinnedSection = newChats.find((c) => c.label === "Pinned");
         if (pinnedSection) {
           pinnedSection.chats.push({
@@ -320,8 +233,8 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     user && user.firstName && user.lastName
       ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
       : user?.firstName
-      ? user.firstName[0].toUpperCase()
-      : "U";
+        ? user.firstName[0].toUpperCase()
+        : "U";
 
   const userName = user?.firstName || "User";
 
@@ -350,8 +263,8 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
             <Image
               src="/favicon.png"
               alt="Healthbot"
-              width = {24}
-              height = {24}
+              width={24}
+              height={24}
               className="rounded"
             />
             <h1 className="text-sm font-bold text-white">Healthbot</h1>
@@ -426,7 +339,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
               hoveredChatId={hoveredChatId}
               onHoverChat={setHoveredChatId}
               pinnedChatIds={pinnedChatIds}
-              loadingChatId={loadingChatId}
+              loadingChatId={null}
               onPin={handlePin}
               onDelete={handleDeleteClick}
             />

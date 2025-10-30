@@ -24,3 +24,8 @@ export type Message = {
   content: string;
   timestamp: Date;
 };
+
+export type ChatResponse = {
+  messages: Message[];
+  images: ChatImage[];
+};
