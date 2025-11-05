@@ -2,17 +2,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import type { ChatCategory } from "~/lib/types";
-import { getGlobalChats, setGlobalChats, loadChats } from "~/lib/chatStore";
+import { getGlobalChats, setGlobalChats, loadChats, deleteChat } from "~/lib/chatStore";
 import CollapsedSidebar from "./collapsedSidebar";
 import SearchModal from "./searchModel";
 import CategorySection from "./categorySection";
 import DeleteModal from "./deleteModel";
 import { useParams, useRouter } from "next/navigation";
-import LogoutModal from "./logoutModel";
 import Image from "next/image";
+import Link from "next/link";
 
 type SidebarLeftProps = {
   isOpen: boolean;
@@ -50,7 +50,6 @@ function initializePinnedIds(chats: ChatCategory[]): Set<string> {
 export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   const params = useParams();
   const router = useRouter();
-  const { signOut } = useAuth();
   const { user } = useUser();
   const activeChatId = params?.id as string | null;
   const [searchQuery, setSearchQuery] = useState("");
@@ -69,7 +68,6 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     chatname: "",
   });
   const [showSearchModal, setShowSearchModal] = useState(false);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [chats, setChats] = useState(() => initializeChats());
   const [pinnedChatIds, setPinnedChatIds] = useState(() => 
     initializePinnedIds(getGlobalChats())
@@ -100,11 +98,6 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   const handleNewChat = useCallback(() => {
     router.push("/chat");
   }, [router]);
-
-  const handleLogout = useCallback(async () => {
-    await signOut();
-    router.push("/sign-in");
-  }, [signOut, router]);
 
   useKeyboardShortcut("j", stableToggle);
   useKeyboardShortcut("k", handleNewChat);
@@ -157,6 +150,8 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   };
 
   const handleConfirmDelete = (chatId: string) => {
+    deleteChat(chatId);
+
     setChats((prevChats) =>
       prevChats
         .map((category) => ({
@@ -348,8 +343,8 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
 
         {/* Footer - User Profile */}
         <div className="border-t border-slate-800 p-3 shrink-0">
-          <button
-            onClick={() => setShowLogoutModal(true)}
+          <Link
+            href="/settings"
             className="flex items-center gap-3 w-full px-2 py-2 rounded hover:bg-slate-800 transition-colors"
           >
             <div className="w-8 h-8 rounded-full bg-linear-to-br from-blue-400 to-slate-600 flex items-center justify-center shrink-0">
@@ -360,7 +355,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
             <div className="flex-1 text-left">
               <p className="text-xs font-medium text-white">{userName}</p>
             </div>
-          </button>
+          </Link>
         </div>
       </aside>
 
@@ -381,13 +376,6 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         isOpen={showSearchModal}
         onClose={() => setShowSearchModal(false)}
         chats={chats}
-      />
-
-      <LogoutModal
-        isOpen={showLogoutModal}
-        userName={userName}
-        onConfirm={handleLogout}
-        onCancel={() => setShowLogoutModal(false)}
       />
     </>
   );

@@ -71,6 +71,28 @@ export function createNewChat(
   saveChats();
 }
 
+export function deleteChat(chatId: string): void {
+  const chats = getGlobalChats();
+
+  // Remove from categories
+  const updated = chats
+    .map((category) => ({
+      ...category,
+      chats: category.chats.filter((chat) => chat.id !== chatId),
+    }))
+    .filter((category) => category.chats.length > 0);
+
+  setGlobalChats(updated);
+
+  // ✅ Clear messages from localStorage
+  const messagesKey = `${STORAGE_KEY}${chatId}`;
+  try {
+    localStorage.removeItem(messagesKey);
+  } catch (error) {
+    console.error(`Failed to delete messages for chat ${chatId}:`, error);
+  }
+}
+
 export function updateChatImages(
   chatId: string | undefined,
   newImages: ChatImage[]

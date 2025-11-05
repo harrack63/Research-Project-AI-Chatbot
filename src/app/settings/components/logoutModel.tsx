@@ -1,13 +1,11 @@
 type LogoutModalProps = {
   isOpen: boolean;
-  userName: string;
   onConfirm: () => void;
   onCancel: () => void;
 };
 
 export default function LogoutModal({
   isOpen,
-  userName,
   onConfirm,
   onCancel,
 }: LogoutModalProps) {
@@ -18,7 +16,7 @@ export default function LogoutModal({
       <div className="bg-slate-900 rounded-xl p-6 max-w-md mx-4 border border-slate-800 animate-scale-in origin-center">
         <h2 className="text-xl font-semibold text-white mb-3">Sign Out</h2>
         <p className="text-slate-300 text-sm mb-6">
-          Are you sure you want to sign out, {userName}?
+          Are you sure you want to sign out?
         </p>
         <div className="flex gap-3 justify-end">
           <button

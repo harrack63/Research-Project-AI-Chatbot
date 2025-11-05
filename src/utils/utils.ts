@@ -2,6 +2,7 @@
 import { ChatResponse } from "~/lib/types";
 import { getAuthToken } from "./auth";
 import { z } from "zod";
+import { API_ROUTES } from "~/lib/api";
 
 const MessageSchema = z.object({
   role: z.enum(["user", "assistant"]),
@@ -9,14 +10,6 @@ const MessageSchema = z.object({
 });
 
 type Message = z.infer<typeof MessageSchema>;
-
-/**
- * Get the backend URL from environment variables or use default
- * @returns {string} The backend URL
- */
-export function getBackendUrl(): string {
-  return process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
-}
 
 /**
  * Send a chat message to the backend API
@@ -27,7 +20,6 @@ export function getBackendUrl(): string {
 export async function sendChatMessage(
   messages: Array<{ role: "user" | "assistant"; content: string }>
 ): Promise<ChatResponse> {
-  const backendUrl = getBackendUrl();
   const token = await getAuthToken();
 
   console.log("Sending message to backend");
@@ -40,7 +32,7 @@ export async function sendChatMessage(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${backendUrl}/chat`, {
+  const response = await fetch(API_ROUTES.chat, {
     method: "POST",
     headers,
     body: JSON.stringify({ messages }),
