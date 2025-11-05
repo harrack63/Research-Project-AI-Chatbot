@@ -76,7 +76,7 @@ middleware.ts          # route protection
 
 ## 🧠 Dev Notes
 
-- Run `pnpm dev` — no backend needed if `NEXT_PUBLIC_BACKEND_URL` is set  
+- Run `npm dev` — no backend needed if `NEXT_PUBLIC_BACKEND_URL` is set  
 - Avoid setting state inside unguarded `useEffect`  
 - Use `~/` alias for imports  
 - Tailwind v4 used for styling  
