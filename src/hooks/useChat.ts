@@ -99,7 +99,7 @@ export function useChat(currentChatId?: string) {
           ac.signal // Add abort signal
         );
 
-        if (currentChatId) {
+        if (currentChatId && !ac.signal.aborted) {
           try {
             setMessages((prev) => {
               localStorage.setItem(
@@ -118,8 +118,10 @@ export function useChat(currentChatId?: string) {
           }
         }
       } catch (error) {
-        console.error("Error sending message:", error);
-        updateLastMessage("There was an error contacting the server.");
+        if (!(error instanceof Error) || error.name !== "AbortError") {
+          console.error("Error sending message:", error);
+          updateLastMessage("There was an error contacting the server.");
+        }
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
@@ -191,24 +193,21 @@ export function useChat(currentChatId?: string) {
       }
 
       // Build system context with preferences
-      const systemContext =
-        prefs.chatName || prefs.personalInfo
-          ? `User preferences:\nName: ${prefs.chatName || ""}\nInfo: ${
-              prefs.personalInfo || ""
-            }\n\n`
-          : "";
+      const systemContext = prefs.chatName || prefs.personalInfo
+        ? `User preferences:\nName: ${prefs.chatName || ""}\nInfo: ${prefs.personalInfo || ""}`
+        : "";
 
       // Add user message
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: "user",
-        content: systemContext + firstMessage,
+        content: firstMessage,
         timestamp: new Date(),
       };
       setMessages([userMessage]);
 
       // Process bot response
-      processMessage(firstMessage);
+      processMessage(systemContext + firstMessage);
     }
   }, [currentChatId, messages.length, processMessage]);
 

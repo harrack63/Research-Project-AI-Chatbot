@@ -107,7 +107,15 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
               {messages.map((message) => (
                 <ChatMessage key={message.id} message={message} />
               ))}
-              {isLoading && (
+               {isLoading &&
+                // Find the latest assistant message (placeholder added by useChat)
+                (() => {
+                  const lastAssistant = [...messages]
+                    .reverse()
+                    .find((m) => m.role === "assistant");
+                  // Show dots only while waiting for the first token
+                  return !!lastAssistant && lastAssistant.content.length === 0;
+                })() && (
                 <div className="flex justify-start">
                   <div className="flex items-center gap-2">
                     {[0, 1, 2].map((i) => (
