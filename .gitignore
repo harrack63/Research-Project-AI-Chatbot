@@ -36,9 +36,8 @@ yarn-error.log*
 next-env.d.ts
 
 # backend (for analysis on local)
-/corpus/
-/patient_cases/
-/prompts/
-chatbot.py
-config.py
-state_persona.py
+_backend/__pycache__/
+_backend/corpus/
+_backend/out/
+_backend/patient_cases/
+_backend/prompts/

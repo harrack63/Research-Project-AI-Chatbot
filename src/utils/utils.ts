@@ -1,90 +1,70 @@
 // utils/utils.ts
-import { ChatResponse } from "~/lib/types";
-import { getAuthToken } from "./auth";
-import { z } from "zod";
-import { API_ROUTES } from "~/lib/api";
+import type { ChatImage, Message } from "~/lib/types";
 
-const MessageSchema = z.object({
-  role: z.enum(["user", "assistant"]),
-  content: z.string(),
-});
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-type Message = z.infer<typeof MessageSchema>;
+export const API_ROUTES = {
+  chat: `${API_BASE}/api/chat`,
+  chatStream: `${API_BASE}/api/chat/stream`,
+};
 
-/**
- * Send a chat message to the backend API
- * @param {Array} messages - Array of message objects with role and content
- * @returns {Promise<Object>} Response data from the backend
- * @throws {Error} If the request fails
- */
-export async function sendChatMessage(
-  messages: Array<{ role: "user" | "assistant"; content: string }>
-): Promise<ChatResponse> {
-  const token = await getAuthToken();
-
-  console.log("Sending message to backend");
-
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  const response = await fetch(API_ROUTES.chat, {
+export async function sendChatMessageStream(
+  messages: Message[],
+  onToken: (token: string) => void,
+  onImages?: (images: ChatImage[]) => void,
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch(API_ROUTES.chatStream, {
     method: "POST",
-    headers,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream",
+      "Cache-Control": "no-cache",
+    },
     body: JSON.stringify({ messages }),
+    signal,
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      window.location.href = "/sign-in";
-    }
-    throw new Error(
-      `Backend error: ${response.status} ${response.statusText}`
-    );
+    throw new Error("Failed to stream chat");
   }
 
-  return await response.json();
-}
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error("No response body");
 
-/**
- * Handle chat message sending with error handling
- * @param {Array} messages - Current messages array
- * @param {string} userInput - User's input message
- * @param {Function} setMessages - Function to update messages state
- * @param {Function} setLoading - Function to update loading state
- * @returns {Promise<void>}
- */
-export async function handleSendMessage(
-  messages: Message[],
-  userInput: string,
-  setMessages: (messages: Message[]) => void,
-  setLoading: (loading: boolean) => void
-): Promise<void> {
-  if (!userInput.trim()) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
 
-  const newMessages: Message[] = [
-    ...messages,
-    { role: "user", content: userInput },
-  ];
-  setMessages(newMessages);
-  setLoading(true);
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
 
-  try {
-    const data = await sendChatMessage(newMessages);
-    const validatedMessages = z.array(MessageSchema).parse(data.messages);
-    setMessages(validatedMessages);
-  } catch (err) {
-    console.error("Error sending message:", err);
-    setMessages([
-      ...messages,
-      { role: "user", content: userInput },
-      { role: "assistant", content: "Sorry, there was an error." },
-    ]);
-  } finally {
-    setLoading(false);
+    buffer += decoder.decode(value, { stream: true });
+    
+    // Split on double newlines (SSE frame boundary)
+    const events = buffer.split("\n\n");
+    
+    // Keep last incomplete event in buffer
+    buffer = events.pop() ?? "";
+
+    for (const evt of events) {
+      // Find the data line in this event
+      const dataLine = evt
+        .split("\n")
+        .find((l) => l.startsWith("data: "));
+      
+      if (!dataLine) continue;
+      
+      try {
+        const data = JSON.parse(dataLine.slice(6));
+        if (data.done) return;
+        if (data.error) throw new Error(data.error);
+        if (data.token) onToken(data.token);
+        if (data.images && onImages) onImages(data.images);
+      } catch (e) {
+        console.error("Parse error:", e);
+      }
+    }
   }
 }

@@ -8,7 +8,6 @@ import LogoutModal from "./components/logoutModel";
 
 type Preferences = {
   chatName: string;
-  traits: string[];
   personalInfo: string;
 };
 
@@ -21,7 +20,6 @@ export default function SettingsPage() {
   );
   const [prefs, setPrefs] = useState<Preferences>({
     chatName: "",
-    traits: [],
     personalInfo: "",
   });
 
@@ -39,7 +37,6 @@ export default function SettingsPage() {
           ...p,
           chatName: parsed.chatName || "",
           personalInfo: parsed.personalInfo || "",
-          traits: parsed.traits || [],
         }));
       }
     } catch (err) {

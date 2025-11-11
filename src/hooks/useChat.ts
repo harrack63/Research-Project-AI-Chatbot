@@ -4,7 +4,7 @@ import type { ChatImage, Message } from "~/lib/types";
 import { useRouter } from "next/navigation";
 import { generateUniqueChatId } from "~/lib/chatUtils";
 import { createNewChat } from "~/lib/chatStore";
-import { sendChatMessage } from "~/utils/utils";
+import { sendChatMessageStream } from "~/utils/utils";
 
 const MESSAGES_STORAGE_KEY = "healthbot_messages_";
 
@@ -43,22 +43,31 @@ export function useChat(currentChatId?: string) {
     setMessages((prev) => [...prev, message]);
   }, []);
 
-  const updateLastMessage = useCallback((content: string) => {
-    setMessages((prev) => {
-      const updated = [...prev];
-      if (updated.length > 0) {
-        updated[updated.length - 1] = {
-          ...updated[updated.length - 1],
-          content,
-        };
-      }
-      return updated;
-    });
-  }, []);
+  const updateLastMessage = useCallback(
+    (content: string | ((prev: string) => string)) => {
+      setMessages((prev) => {
+        const updated = [...prev];
+        if (updated.length > 0) {
+          const lastMsg = updated[updated.length - 1];
+          updated[updated.length - 1] = {
+            ...lastMsg,
+            content:
+              typeof content === "function"
+                ? content(lastMsg.content)
+                : content,
+          };
+        }
+        return updated;
+      });
+    },
+    []
+  );
 
   const processMessage = useCallback(
     async (userInput: string) => {
       setIsLoading(true);
+      const ac = new AbortController();
+      abortControllerRef.current = ac;
 
       const assistantMessage: Message = {
         id: `assistant-${Date.now()}`,
@@ -69,33 +78,54 @@ export function useChat(currentChatId?: string) {
       addMessage(assistantMessage);
 
       try {
-        const chatResponse = await sendChatMessage([
-          ...messages,
-          { role: "user", content: userInput, id: `user-${Date.now()}`, timestamp: new Date() },
-        ]);
+        await sendChatMessageStream(
+          [
+            ...messages,
+            {
+              role: "user",
+              content: userInput,
+              id: `user-${Date.now()}`,
+              timestamp: new Date(),
+            },
+          ] as Message[],
+          (token: string): void => {
+            updateLastMessage((prev) => prev + token);
+          },
+          (newImages: ChatImage[]): void => {
+            if (newImages && newImages.length > 0) {
+              setImages((prev) => [...prev, ...newImages]);
+            }
+          },
+          ac.signal // Add abort signal
+        );
 
-        const lastMessage = chatResponse.messages?.[
-          chatResponse.messages.length - 1
-        ];
-
-        if (lastMessage && lastMessage.role === "assistant") {
-          updateLastMessage(lastMessage.content);
-        } else {
-          updateLastMessage("Sorry, something went wrong with the message.");
-        }
-
-        // Add images if any
-        if (chatResponse.images && chatResponse.images.length > 0) {
-          setImages((prev) => [...prev, ...chatResponse.images]);
+        if (currentChatId) {
+          try {
+            setMessages((prev) => {
+              localStorage.setItem(
+                `${MESSAGES_STORAGE_KEY}${currentChatId}`,
+                JSON.stringify(
+                  prev.map((msg) => ({
+                    ...msg,
+                    timestamp: msg.timestamp.toISOString(),
+                  }))
+                )
+              );
+              return prev;
+            });
+          } catch (error) {
+            console.error("Failed to save messages:", error);
+          }
         }
       } catch (error) {
         console.error("Error sending message:", error);
         updateLastMessage("There was an error contacting the server.");
       } finally {
         setIsLoading(false);
+        abortControllerRef.current = null;
       }
     },
-    [addMessage, messages, updateLastMessage]
+    [addMessage, currentChatId, messages, updateLastMessage]
   );
 
   const sendMessage = useCallback(
@@ -149,11 +179,30 @@ export function useChat(currentChatId?: string) {
       // Clear the URL param
       window.history.replaceState({}, "", `/chat/${currentChatId}`);
 
+      // Load preferences from localStorage
+      let prefs = { chatName: "", personalInfo: "" };
+      try {
+        const stored = localStorage.getItem("healthbot_preferences");
+        if (stored) {
+          prefs = JSON.parse(stored);
+        }
+      } catch (e) {
+        console.error("Failed to load preferences:", e);
+      }
+
+      // Build system context with preferences
+      const systemContext =
+        prefs.chatName || prefs.personalInfo
+          ? `User preferences:\nName: ${prefs.chatName || ""}\nInfo: ${
+              prefs.personalInfo || ""
+            }\n\n`
+          : "";
+
       // Add user message
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: "user",
-        content: firstMessage,
+        content: systemContext + firstMessage,
         timestamp: new Date(),
       };
       setMessages([userMessage]);
