@@ -42,3 +42,7 @@ _backend/corpus/
 _backend/out/
 _backend/patient_cases/
 _backend/prompts/
+_backend/milvus-local/
+_backend/milvus-data/
+_backend/utils/__pycache__/
+_backend/utils/__init__.py

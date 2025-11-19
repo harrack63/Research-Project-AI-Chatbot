@@ -5,8 +5,10 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { useCallback, useEffect, useState } from "react";
 import LogoutModal from "./components/logoutModel";
+import { useUser } from "@clerk/nextjs";
 
 type Preferences = {
+  user_id: string;
   chatName: string;
   personalInfo: string;
 };
@@ -14,11 +16,13 @@ type Preferences = {
 export default function SettingsPage() {
   const router = useRouter();
   const { signOut, isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
 
   const [activeTab, setActiveTab] = useState<"customization" | "account">(
     "customization"
   );
   const [prefs, setPrefs] = useState<Preferences>({
+    user_id: "",
     chatName: "",
     personalInfo: "",
   });
@@ -29,12 +33,16 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!isLoaded) return;
     if (!isSignedIn) router.push("/sign-in");
+    if (user) {
+      setPrefs((p) => ({ ...p, user_id: user.id }));
+    }
     try {
       const stored = localStorage.getItem("healthbot_preferences");
       if (stored) {
         const parsed: Preferences = JSON.parse(stored);
         setPrefs((p) => ({
           ...p,
+          user_id: user?.id || p.user_id,
           chatName: parsed.chatName || "",
           personalInfo: parsed.personalInfo || "",
         }));
@@ -42,7 +50,7 @@ export default function SettingsPage() {
     } catch (err) {
       console.error("Failed to load preferences:", err);
     }
-  }, [isLoaded, isSignedIn, router]);
+  }, [isLoaded, isSignedIn, router, user]);
 
   const handleSignOut = useCallback(async () => {
     setShowLogoutModal(false);
@@ -54,23 +62,23 @@ export default function SettingsPage() {
     localStorage.setItem("healthbot_preferences", JSON.stringify(prefs));
 
     try {
-        // Replace w correct API endpoint
-        const res = await fetch("/api/user/preferences", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(prefs),
-        });
+      // Replace w correct API endpoint
+      const res = await fetch("/api/user/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prefs),
+      });
 
-        if (res.ok) {
-            setSaveMessage("✅ Preferences saved!");
-        } else {
-            setSaveMessage("⚠️ Failed to save preferences");
-        }
+      if (res.ok) {
+        setSaveMessage("✅ Preferences saved!");
+      } else {
+        setSaveMessage("⚠️ Failed to save preferences");
+      }
     } catch (err) {
-        setSaveMessage("❌ Error saving preferences");
-        console.error(err);
+      setSaveMessage("❌ Error saving preferences");
+      console.error(err);
     } finally {
-        setTimeout(() => setSaveMessage(""), 3000);
+      setTimeout(() => setSaveMessage(""), 3000);
     }
   };
 

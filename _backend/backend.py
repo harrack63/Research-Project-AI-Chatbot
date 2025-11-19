@@ -2,6 +2,8 @@
 from typing import Union, List
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
+from utils.utils_milvus import MilvusUtil
+from config import MILVUS_URI
 
 from utils.utils_openai import OpenAIClientRunner
 from utils.utils_tensorblock import TensorblockClientRunner
@@ -35,6 +37,11 @@ app.add_middleware(
 )
 
 
+class UserPreferences(BaseModel):
+    user_id: str
+    chatName: str
+    personalInfo: str
+
 class Message(BaseModel):
     role: str
     content: str
@@ -52,11 +59,40 @@ class ChatResponse(BaseModel):
 def read_root():
     return {"Hello": "World"}
 
+@app.post("/api/user/preferences")
+def save_user_preferences(prefs: UserPreferences):
+    """
+    Save user preferences (chatName, personalInfo) into Milvus.
+    Uses Zilliz Cloud / local Milvus via MilvusUtil.
+    """
 
-@app.get("/api/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+    try:
+        # Determine user identifier
+        # You can switch this to Clerk email later using get_current_user()
+        user_id =prefs.user_id
 
+        # Prepare preference dict
+        pref_dict = {
+            "chatName": prefs.chatName,
+            "personalInfo": prefs.personalInfo,
+        }
+
+        # Tags optional — for now using empty list
+        tags = []
+
+        # Save into Milvus
+        milvus = MilvusUtil(uri=MILVUS_URI)
+        milvus.upsert_user_preferences(
+            user_id=user_id,
+            preferences=pref_dict,
+            tags=tags,
+        )
+
+        return {"ok": True, "message": "Preferences saved to Milvus"}
+
+    except Exception as e:
+        logger.error(f"Failed to save user preferences: {e}")
+        return {"ok": False, "error": str(e)}
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat_endpoint(req: ChatRequest,):

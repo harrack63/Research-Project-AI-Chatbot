@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuthStatus } from "~/hooks/useAuth";
+import { useAuthStatus } from "~/app/useAuth";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 

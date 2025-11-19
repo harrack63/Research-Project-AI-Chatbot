@@ -1,8 +1,14 @@
+import os
+from dotenv import load_dotenv
+
 VECTORDB_NAME_CHAT_HISTORY = "vectordb_chat_history"
 
 # Milvus Configuration
-MILVUS_URI = "http://milvus-standalone:19530"
-MILVUS_TOKEN = ""
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env.local")
+load_dotenv(env_path)
+
+MILVUS_URI = os.getenv("MILVUS_URI")
+MILVUS_TOKEN = os.getenv("MILVUS_TOKEN")
 
 OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 

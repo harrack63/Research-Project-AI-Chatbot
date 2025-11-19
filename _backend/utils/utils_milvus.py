@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-
 class MilvusUtil:
     def __init__(self, uri: Optional[str] = None, token: Optional[str] = None):
         """
