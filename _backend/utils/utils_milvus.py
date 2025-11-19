@@ -1,8 +1,8 @@
 import os
 import json
 from typing import List, Dict, Any, Optional
+from langchain_huggingface import HuggingFaceEmbeddings
 from pymilvus import MilvusClient
-from langchain_openai import OpenAIEmbeddings
 from tqdm import tqdm
 from dotenv import load_dotenv
 
@@ -23,15 +23,23 @@ class MilvusUtil:
         
         # Initialize client
         if self.token:
-            self.client = MilvusClient(uri=self.uri, token=self.token)
+            self.client = MilvusClient(
+            uri=self.uri,
+            token=self.token,
+            db_name="default"
+        )
         else:
-            self.client = MilvusClient(uri=self.uri)
+            self.client = MilvusClient(uri=self.uri, db_name="default")
         
         # Initialize embedding model
-        self.embedding_model = OpenAIEmbeddings(
-            model=os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+        self.embedding_model = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2"
         )
         self.embedding_dim = len(self.embedding_model.embed_query("test"))
+        
+        self._ensure_user_prefs_collection()
+        self._ensure_mayo_clinic_collection()
+        self._ensure_diabetes_recipes_collection()
 
     def search_vectors(
         self, 
@@ -431,6 +439,57 @@ class MilvusUtil:
             
         except Exception as e:
             raise Exception(f"Failed to get stats for collection {collection_name}: {str(e)}")
+
+    def upsert_user_preferences(self, user_id: str, preferences: dict, tags: list[str] | None = None):
+        coll = "user_preferences"
+        self.ensure_collection_loaded(coll)
+
+        prefs_text = json.dumps(preferences, ensure_ascii=False, sort_keys=True)
+        emb = self.embedding_model.embed_query(prefs_text)
+
+        if tags is None:
+            tags = []
+
+        # Delete old row
+        try:
+            self.client.delete(coll, filter=f'user_id == "{user_id}"')
+        except Exception:
+            pass
+
+        # Insert
+        self.client.insert(
+            collection_name=coll,
+            data=[{
+                "user_id": user_id,
+                "prefs_json": prefs_text,
+                "tags": tags,
+                "embedding": emb
+            }]
+        )
+        
+    def _ensure_user_prefs_collection(self):
+        """Ensure user_preferences exists; create if missing."""
+        coll = "user_preferences"
+        try:
+            if not self.client.has_collection(collection_name=coll):
+                fields = [
+                    {"name": "user_id", "type": "VarChar", "is_primary": True, "max_length": 256},
+                    {"name": "prefs_json", "type": "VarChar", "max_length": 4096},
+                    {"name": "tags", "type": "Array", "element_type": "VarChar", "max_length": 128},
+                    {"name": "embedding", "type": "FloatVector", "dim": self.embedding_dim},
+                ]
+                self.client.create_collection(
+                    collection_name=coll,
+                    schema={"auto_id": False, "fields": fields},
+                    index_params={
+                        "metric_type": "IP",
+                        "index_type": "HNSW",
+                        "params": {"M": 16, "efConstruction": 64},
+                    },
+                )
+                print(f"✅ Created Milvus collection: {coll}")
+        except Exception as e:
+            print(f"⚠️ Could not ensure user_preferences collection: {e}")
 
 
 def main():

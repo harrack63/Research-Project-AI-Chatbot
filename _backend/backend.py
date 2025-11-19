@@ -79,13 +79,14 @@ def save_user_preferences(prefs: UserPreferences):
 
         # Tags optional — for now using empty list
         tags = []
+        tags_str = ",".join(tags) if tags else ""
 
         # Save into Milvus
         milvus = MilvusUtil(uri=MILVUS_URI)
         milvus.upsert_user_preferences(
             user_id=user_id,
             preferences=pref_dict,
-            tags=tags,
+            tags=tags_str,
         )
 
         return {"ok": True, "message": "Preferences saved to Milvus"}
