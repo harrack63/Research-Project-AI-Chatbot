@@ -106,26 +106,6 @@ def chat_endpoint(req: ChatRequest,):
 
     logger.info("Processing chat messages...")
     start_time = time.time()
-    if not history or history[0].role != "assistant":
-        history = [
-            Message(role="assistant", content="Hi! How can I help you today?")
-        ] + history
-
-    # TODO: Set user profile
-    user_msg = req.messages[-1].content
-    if user_msg.lower().startswith("admin"):
-        user_profile = user_msg[
-            user_msg.find("admin set user") + len("admin set user") :
-        ]
-        user_profile = user_profile.split()
-        user_profile = "_".join(user_profile)
-        user_profile = user_profile.lower()
-        with open("out/user_profile.txt", "w") as f:
-            f.write(user_profile)
-        logger.info(f"User profile set to: {user_profile}")
-        response = "ADMIN MSG: User profile set to: " + user_profile
-        history.append(Message(role="assistant", content=response))
-        return {"messages": history}
 
     try:
         # ## Set user profile
