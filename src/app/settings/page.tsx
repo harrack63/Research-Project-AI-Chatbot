@@ -2,10 +2,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { useCallback, useEffect, useState } from "react";
 import LogoutModal from "./components/logoutModel";
-import { useUser } from "@clerk/nextjs";
+import { API_ROUTES } from "~/lib/api";
 
 type Preferences = {
   user_id: string;
@@ -63,7 +63,7 @@ export default function SettingsPage() {
 
     try {
       // Replace w correct API endpoint
-      const res = await fetch("/api/user/preferences", {
+      const res = await fetch(API_ROUTES.userPreferences, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(prefs),

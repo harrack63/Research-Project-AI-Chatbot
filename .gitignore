@@ -36,9 +36,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# backend (for analysis on local)
-
-# Temp unignoring for ssh to get the files
+# backend
 _backend/__pycache__/
 # _backend/corpus/
 # _backend/out/
@@ -48,3 +46,5 @@ _backend/__pycache__/
 # _backend/milvus-data/
 # _backend/utils/__pycache__/
 # _backend/utils/__init__.py
+# clerk configuration (can include secrets)
+/.clerk/

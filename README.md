@@ -1,3 +1,11 @@
+# BEFORE INSTALLING ANYTHING
+
+Install conda, python=3.11
+Install nvm, version 24.9.0
+
+Backend lives on https://0.0.0.0:8001
+Frontend lives on https://localhost:3000
+
 # 🧠 Healthbot Frontend
 
 > Internal frontend repo for the Healthbot AI chat interface.

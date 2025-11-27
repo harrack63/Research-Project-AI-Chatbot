@@ -1,13 +1,6 @@
 // utils/utils.ts
 import type { ChatImage, Message } from "~/lib/types";
-
-export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
-
-export const API_ROUTES = {
-  chat: `${API_BASE}/api/chat`,
-  chatStream: `${API_BASE}/api/chat/stream`,
-};
+import { API_BASE, API_ROUTES } from "~/lib/api";
 
 export async function sendChatMessageStream(
   messages: Message[],
