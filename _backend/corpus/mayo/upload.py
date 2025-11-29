@@ -21,7 +21,7 @@ milvus_client = MilvusClient(
 )
 
 llm = ChatOpenAI(
-    model="gpt-5",
+    model="OpenAI/gpt-5-mini",
     temperature=0,
     api_key=os.getenv("OPENAI_API_KEY")
 )

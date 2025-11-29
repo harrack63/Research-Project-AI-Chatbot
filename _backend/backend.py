@@ -1,5 +1,5 @@
 
-from typing import Union, List
+from typing import Union, List, Optional
 from fastapi import FastAPI, HTTPException, Depends
 from pydantic import BaseModel
 from utils.utils_milvus import MilvusUtil
@@ -109,7 +109,7 @@ async def chat_endpoint_stream(req: ChatRequest):
             # Use the experiment name logic or map user_id to it
             chatbot = PersonalizedChatbot(
                 exp_name=user_id, 
-                llm_model_name="Azure/gpt-5", # Swapped to gpt-5
+                llm_model_name="OpenAI/gpt-5-mini",
                 user_id=user_id
             )
             

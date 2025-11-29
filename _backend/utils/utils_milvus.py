@@ -2,7 +2,7 @@ import os
 import json
 from typing import List, Dict, Any, Optional
 from langchain_huggingface import HuggingFaceEmbeddings
-from pymilvus import MilvusClient
+from pymilvus import MilvusClient, CollectionSchema, FieldSchema, DataType
 from tqdm import tqdm
 from dotenv import load_dotenv
 
@@ -38,8 +38,8 @@ class MilvusUtil:
         self.embedding_dim = len(self.embedding_model.embed_query("test"))
         
         self._ensure_user_prefs_collection()
-        self._ensure_mayo_clinic_collection()
-        self._ensure_diabetes_recipes_collection()
+        # self._ensure_diabetes_recipes_collection()
+        # self._ensure_mayo_clinic_collection()
 
     def search_vectors(
         self, 
@@ -471,27 +471,42 @@ class MilvusUtil:
         """Ensure user_preferences exists; create if missing."""
         coll = "user_preferences"
         try:
+            # If collection exists but is broken (no index), we might want to verify it
+            # But for now, let's just create it if it doesn't exist.
             if not self.client.has_collection(collection_name=coll):
+                # 1. Define Schema
                 fields = [
-                    {"name": "user_id", "type": "VarChar", "is_primary": True, "max_length": 256},
-                    {"name": "prefs_json", "type": "VarChar", "max_length": 4096},
-                    {"name": "tags", "type": "Array", "element_type": "VarChar", "max_length": 128},
-                    {"name": "embedding", "type": "FloatVector", "dim": self.embedding_dim},
+                    FieldSchema(name="user_id", dtype=DataType.VARCHAR, is_primary=True, max_length=256),
+                    FieldSchema(name="prefs_json", dtype=DataType.VARCHAR, max_length=4096),
+                    FieldSchema(name="tags", dtype=DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=100, max_length=128),
+                    FieldSchema(name="embedding", dtype=DataType.FLOAT_VECTOR, dim=self.embedding_dim),
                 ]
+                schema = CollectionSchema(fields=fields, auto_id=False)
+                
+                # 2. Prepare Index Params using the client helper (Fixes the type error)
+                index_params = self.client.prepare_index_params()
+                index_params.add_index(
+                    field_name="embedding", 
+                    index_type="HNSW", 
+                    metric_type="IP", 
+                    params={"M": 16, "efConstruction": 64}
+                )
+
+                # 3. Create Collection WITH Index
                 self.client.create_collection(
                     collection_name=coll,
-                    schema={"auto_id": False, "fields": fields},
-                    index_params={
-                        "metric_type": "IP",
-                        "index_type": "HNSW",
-                        "params": {"M": 16, "efConstruction": 64},
-                    },
+                    schema=schema,
+                    index_params=index_params
                 )
-                print(f"✅ Created Milvus collection: {coll}")
+                print(f"✅ Created Milvus collection with index: {coll}")
+                
+            # 4. Explicitly Load (Critical for search/query)
+            self.client.load_collection(coll)
+            
         except Exception as e:
             print(f"⚠️ Could not ensure user_preferences collection: {e}")
-            
-     def get_user_preferences(self, user_id: str) -> dict:
+               
+    def get_user_preferences(self, user_id: str) -> dict:
         """Retrieve user preferences."""
         coll = "user_preferences"
         if not self.collection_exists(coll):

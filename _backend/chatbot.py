@@ -9,7 +9,7 @@ from langgraph.types import Command
 
 from langchain_chroma import Chroma
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
-from typing import TypedDict, Literal
+from typing import TypedDict, Literal, Optional
 import json
 import os
 from datetime import datetime
@@ -27,6 +27,9 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY") if os.getenv("OPENAI_API_KEY") else None
 FORGE_KEY = os.getenv("FORGE_KEY") if os.getenv("FORGE_KEY") else None
 assert OPENAI_API_KEY or FORGE_KEY, "Either OPENAI_API_KEY or FORGE_KEY must be set"
+
+print(f"DEBUG: FORGE_KEY found: {'Yes' if FORGE_KEY else 'No'}")
+print(f"DEBUG: OPENAI_API_KEY found: {'Yes' if OPENAI_API_KEY else 'No'}")
 
 
 class ChatbotState(TypedDict):
@@ -84,9 +87,9 @@ class PersonalizedChatbot:
     - Graph-based conversation flow
     """
 
-     def __init__(
+    def __init__(
         self,
-        llm_model_name: str = "gpt-5", # Updated default
+        llm_model_name: str = "OpenAI/gpt-5-mini", # Updated default
         exp_name: str = "debug",
         debug: bool = False,
         user_id: str = "default_user" # Added user_id
@@ -111,7 +114,7 @@ class PersonalizedChatbot:
         if not os.path.exists(self.workdir):
             os.makedirs(self.workdir)
 
-        # Set up logging to file
+        # Set up logging to file 
         self.init_logger(workdir=self.workdir)
         self.logger.info(
             "=" * 10 + f" Initializing {self.__class__.__name__}... " + "=" * 10
@@ -126,10 +129,6 @@ class PersonalizedChatbot:
             if llm_model_name.startswith("OpenAI/"):
                 llm_model_name = llm_model_name.split("/")[1]
             self.llm_runner = OpenAIClientRunner(model=llm_model_name)
-        
-        # Initialize Milvus utils
-        if not self.milvus_util and MILVUS_URI:
-             self.milvus_util = MilvusUtil(uri=MILVUS_URI)
 
         self.logger.info(f"Initialized llm_runner with model: {llm_model_name}")
         # self.agent_update_persona = AgentUpdatePersona(
@@ -180,6 +179,10 @@ class PersonalizedChatbot:
         self.logger.info(
             f"__init__ executed in {(datetime.now() - start_time).total_seconds():.2f} seconds"
         )
+        
+        # Initialize Milvus utils
+        if not self.milvus_util and MILVUS_URI:
+             self.milvus_util = MilvusUtil(uri=MILVUS_URI)
         
     def load_preferences(self) -> dict:
         if self.milvus_util:
@@ -254,7 +257,6 @@ class PersonalizedChatbot:
 
         return final_state["assistant_msg"]
     
-    # chatbot.py - Modify the chat method to support streaming
     @log_execution_time
     def chat_stream(self, user_msg: str):
         """
@@ -272,16 +274,21 @@ class PersonalizedChatbot:
             "assistant_msg_timestamp": datetime.now().isoformat(),
         })
         
-        # Process through graph and collect tokens
-        final_state = self.graph_agent.invoke(state)
-        full_response = final_state["assistant_msg"]
+        full_response = ""
+        # Process through graph and stream updates
+        for event in self.graph_agent.stream(state, stream_mode="updates"):
+            for node_name, node_state in event.items():
+                if "assistant_msg" in node_state and node_state["assistant_msg"]:
+                    # In a real streaming setup, this would yield partial chunks.
+                    # Currently, nodes return full responses, so we yield the result.
+                    chunk = node_state["assistant_msg"]
+                    yield chunk
+                    full_response = chunk
         
-        # Stream the response token by token
-        for token in full_response.split():
-            yield token + " "
-        
+        # Save state
+        final_state = state
+        final_state["assistant_msg"] = full_response
         self.save(final_state)
-
     @log_execution_time
     def update_persona(
         self,
@@ -855,7 +862,7 @@ def main():
     chatbot = PersonalizedChatbot(
         exp_name="debug",
         # llm_model_name="Gemini/models/gemini-2.0-flash",
-        llm_model_name="gpt-5",
+        llm_model_name="OpenAI/gpt-5-mini",
         debug=True,
     )
 
