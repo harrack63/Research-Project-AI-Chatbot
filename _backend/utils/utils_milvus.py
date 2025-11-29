@@ -490,6 +490,32 @@ class MilvusUtil:
                 print(f"✅ Created Milvus collection: {coll}")
         except Exception as e:
             print(f"⚠️ Could not ensure user_preferences collection: {e}")
+            
+     def get_user_preferences(self, user_id: str) -> dict:
+        """Retrieve user preferences."""
+        coll = "user_preferences"
+        if not self.collection_exists(coll):
+            return {}
+
+        self.ensure_collection_loaded(coll)
+        try:
+            res = self.client.query(
+                collection_name=coll,
+                filter=f'user_id == "{user_id}"',
+                output_fields=["prefs_json"],
+                limit=1
+            )
+            if not res:
+                return {}
+            
+            # Milvus returns a list of dicts
+            data = res[0]
+            if "prefs_json" in data:
+                return json.loads(data["prefs_json"])
+            return {}
+        except Exception as e:
+            print(f"Error retrieving user preferences: {e}")
+            return {}
 
 
 def main():

@@ -38,6 +38,7 @@ class ChatbotState(TypedDict):
     user_msg_timestamp: str
     assistant_msg: str
     assistant_msg_timestamp: str
+    user_preferences: dict
 
 
 class ChatHistoryEntry(TypedDict):
@@ -83,11 +84,12 @@ class PersonalizedChatbot:
     - Graph-based conversation flow
     """
 
-    def __init__(
+     def __init__(
         self,
-        llm_model_name: str = "Azure/gpt-5-mini",
+        llm_model_name: str = "gpt-5", # Updated default
         exp_name: str = "debug",
         debug: bool = False,
+        user_id: str = "default_user" # Added user_id
     ):
         """
         Initialize the personalized chatbot.
@@ -102,6 +104,7 @@ class PersonalizedChatbot:
         self.debug_counter = 0
         self.exp_name = exp_name
         self.llm_model_name = llm_model_name
+        self.user_id = user_id
 
         # Ensure experiment work directory exists before setting up logging
         self.workdir = f"out/{self.exp_name}"
@@ -123,6 +126,10 @@ class PersonalizedChatbot:
             if llm_model_name.startswith("OpenAI/"):
                 llm_model_name = llm_model_name.split("/")[1]
             self.llm_runner = OpenAIClientRunner(model=llm_model_name)
+        
+        # Initialize Milvus utils
+        if not self.milvus_util and MILVUS_URI:
+             self.milvus_util = MilvusUtil(uri=MILVUS_URI)
 
         self.logger.info(f"Initialized llm_runner with model: {llm_model_name}")
         # self.agent_update_persona = AgentUpdatePersona(
@@ -173,6 +180,11 @@ class PersonalizedChatbot:
         self.logger.info(
             f"__init__ executed in {(datetime.now() - start_time).total_seconds():.2f} seconds"
         )
+        
+    def load_preferences(self) -> dict:
+        if self.milvus_util:
+            return self.milvus_util.get_user_preferences(self.user_id)
+        return {}
 
     @log_execution_time
     def _build_graph(self) -> StateGraph:
@@ -843,7 +855,7 @@ def main():
     chatbot = PersonalizedChatbot(
         exp_name="debug",
         # llm_model_name="Gemini/models/gemini-2.0-flash",
-        llm_model_name="Azure/gpt-4o",
+        llm_model_name="gpt-5",
         debug=True,
     )
 

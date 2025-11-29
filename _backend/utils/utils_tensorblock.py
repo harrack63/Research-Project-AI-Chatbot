@@ -117,7 +117,7 @@ class TensorblockClientRunner:
     https://docs.tensorblock.com/api-reference/chat
     """
 
-    def __init__(self, model="OpenAI/gpt-4.1-nano"):
+    def __init__(self, model="OpenAI/gpt-5"):
         self.model = model
         
         load_dotenv('../.env.local')

@@ -170,7 +170,6 @@ export function useChat(currentChatId?: string) {
     abortControllerRef.current?.abort();
   };
 
-  // Handle first message from URL params
   useEffect(() => {
     if (!currentChatId) return;
 
@@ -180,23 +179,7 @@ export function useChat(currentChatId?: string) {
     if (firstMessage && messages.length === 0) {
       // Clear the URL param
       window.history.replaceState({}, "", `/chat/${currentChatId}`);
-
-      // Load preferences from localStorage
-      let prefs = { chatName: "", personalInfo: "" };
-      try {
-        const stored = localStorage.getItem("healthbot_preferences");
-        if (stored) {
-          prefs = JSON.parse(stored);
-        }
-      } catch (e) {
-        console.error("Failed to load preferences:", e);
-      }
-
-      // Build system context with preferences
-      const systemContext = prefs.chatName || prefs.personalInfo
-        ? `User preferences:\nName: ${prefs.chatName || ""}\nInfo: ${prefs.personalInfo || ""}`
-        : "";
-
+      
       // Add user message
       const userMessage: Message = {
         id: `user-${Date.now()}`,
@@ -207,7 +190,7 @@ export function useChat(currentChatId?: string) {
       setMessages([userMessage]);
 
       // Process bot response
-      processMessage(systemContext + firstMessage);
+      processMessage(firstMessage); // Send raw message, backend handles context
     }
   }, [currentChatId, messages.length, processMessage]);
 

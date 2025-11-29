@@ -49,6 +49,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
+    userId: Optional[str] = "default_user"
 
 
 class ChatResponse(BaseModel):
@@ -95,107 +96,50 @@ def save_user_preferences(prefs: UserPreferences):
         logger.error(f"Failed to save user preferences: {e}")
         return {"ok": False, "error": str(e)}
 
-@app.post("/api/chat", response_model=ChatResponse)
-def chat_endpoint(req: ChatRequest,):
-    
-    # Print incoming messages
-    logger.info(f"User messages: {[msg.content for msg in req.messages if msg.role == 'user']}")
-    
-    # Start with a default assistant greeting if this is a new conversation
-    history = req.messages
-
-    logger.info("Processing chat messages...")
-    start_time = time.time()
-
-    try:
-        # ## Set user profile
-        user_profile = "web_debug"
-        if os.path.exists("out/user_profile.txt"):
-            with open("out/user_profile.txt", "r") as f:
-                user_profile = f.read()
-        logger.info(f"Using user profile: {user_profile}")
-
-        chatbot = PersonalizedChatbot(
-            exp_name=user_profile, llm_model_name="Azure/gpt-4o"
-        )
-        reply = chatbot.chat(req.messages[-1].content)
-        history.append(Message(role="assistant", content=reply))
-
-        logger.info(
-            f"Chatbot returned in {time.time() - start_time:.2f} seconds. Sending response to frontend."
-        )
-        return {"messages": history}
-    except Exception as e:
-        import traceback
-        logger.error(f"Full traceback:\n{traceback.format_exc()}")
-        history.append(Message(role="assistant", content=f"Error: {e}"))
-
-        logger.error(f"Sending error response to frontend: {e}")
-        # raise HTTPException(status_code=500, detail=str(e))
-        return {"messages": history}
-
-# Fake streaming endpoint for testing
 @app.post("/api/chat/stream")
 async def chat_endpoint_stream(req: ChatRequest):
-    """Streaming chat endpoint using PersonalizedChatbot Graph"""
-    logger.info(
-      f"User messages: {[msg.content for msg in req.messages if msg.role == 'user']}"
-    )
+    """Streaming chat endpoint"""
+    logger.info(f"User messages: {[msg.content for msg in req.messages if msg.role == 'user']}")
     
     async def stream_response():
         try:
-            # 1. Setup User Profile & Initialize Chatbot (Same as /api/chat)
-            user_profile = "web_debug"
-            if os.path.exists("out/user_profile.txt"):
-                with open("out/user_profile.txt", "r") as f:
-                    user_profile = f.read()
+            # Initialize Chatbot with the specific user ID and GPT-5
+            user_id = req.userId or "default_user"
             
-            logger.info(f"Using user profile: {user_profile}")
-            
-            # Initialize the Graph Bot
+            # Use the experiment name logic or map user_id to it
             chatbot = PersonalizedChatbot(
-                exp_name=user_profile, llm_model_name="Azure/gpt-4o"
+                exp_name=user_id, 
+                llm_model_name="Azure/gpt-5", # Swapped to gpt-5
+                user_id=user_id
             )
             
             user_msg = req.messages[-1].content
-            logger.info(f"User message: {user_msg}")
-
-            # 2. Setup Queue for Thread Communication
+            
+            # Call the generator
+            # Since chatbot.chat_stream yields tokens (strings), we wrap them in SSE format
+            
+            # We need to run the blocking generator in a thread to not block the async loop
+            # OR iterate it if it was async. chat_stream is sync generator.
+            
             q: asyncio.Queue[bytes] = asyncio.Queue()
             SENTINEL = b"__DONE__"
 
-            # 3. Define the pump function (runs in thread)
             def pump():
                 try:
-                    # Optional: send a prelude
-                    q.put_nowait(b": keep-alive\n\n")
-                    
-                    # Call the chatbot graph's stream method
-                    # This method yields strings (tokens), not OpenAI chunk objects
-                    # This won't stream unless the custom LLM is modified, but we keep the structure for future use
-                    stream_generator = chatbot.chat_stream(user_msg)
-                    
-                    for token in stream_generator:
-                        # Format string token into SSE JSON
-                        if token:
-                            frame = f"data: {json.dumps({'token': token})}\n\n".encode('utf-8')
-                            q.put_nowait(frame)
-                            
-                    # Send done signal
+                    for token in chatbot.chat_stream(user_msg):
+                        # Clean token for JSON
+                        frame = f"data: {json.dumps({'token': token.strip()})}\n\n".encode('utf-8')
+                        q.put_nowait(frame)
                     q.put_nowait(f"data: {json.dumps({'done': True})}\n\n".encode('utf-8'))
-                    
                 except Exception as e:
-                    logger.error(f"Stream Pump Error: {e}")
+                    logger.error(f"Streaming error: {e}")
                     err = f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
                     q.put_nowait(err)
                 finally:
                     q.put_nowait(SENTINEL)
 
-            # 4. Start the thread
-            # We use a thread because the graph might be blocking/sync
             Thread(target=pump, daemon=True).start()
 
-            # 5. Async generator yielding frames from the queue
             while True:
                 frame = await q.get()
                 if frame is SENTINEL:
@@ -204,14 +148,14 @@ async def chat_endpoint_stream(req: ChatRequest):
                 await asyncio.sleep(0)
             
         except Exception as e:
-            logger.error(f"Chat setup error: {e}", exc_info=True)
+            logger.error(f"Chat error: {e}", exc_info=True)
             yield f"data: {json.dumps({'error': str(e)})}\n\n".encode("utf-8")
     
     return StreamingResponse(
         stream_response(),
         media_type="text/event-stream; charset=utf-8",
         headers={
-            "Cache-Control": "no-cache, no-transform",
+            "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         }

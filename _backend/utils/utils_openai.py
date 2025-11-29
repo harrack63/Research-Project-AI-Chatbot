@@ -190,7 +190,7 @@ def retry_with_exponential_backoff(
 
 
 class OpenAIClientRunner:
-    def __init__(self, model="gpt-4.1-nano"):
+    def __init__(self, model="gpt-5"):
         self.model = model
         self.client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         logger = logging.getLogger(__name__)
