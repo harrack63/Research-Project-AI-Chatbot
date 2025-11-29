@@ -8,7 +8,7 @@ import { sendChatMessageStream } from "~/utils/utils";
 
 const MESSAGES_STORAGE_KEY = "healthbot_messages_";
 
-export function useChat(currentChatId?: string) {
+export function useChat(userId: string, currentChatId?: string) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [images, setImages] = useState<ChatImage[]>([]);
@@ -65,6 +65,11 @@ export function useChat(currentChatId?: string) {
 
   const processMessage = useCallback(
     async (userInput: string) => {
+      if (!userId) {
+        console.error("Attempted to send message without User ID.");
+        return; 
+      }
+
       setIsLoading(true);
       const ac = new AbortController();
       abortControllerRef.current = ac;
@@ -88,6 +93,7 @@ export function useChat(currentChatId?: string) {
               timestamp: new Date(),
             },
           ] as Message[],
+          userId,
           (token: string): void => {
             updateLastMessage((prev) => prev + token);
           },
@@ -96,7 +102,7 @@ export function useChat(currentChatId?: string) {
               setImages((prev) => [...prev, ...newImages]);
             }
           },
-          ac.signal // Add abort signal
+          ac.signal
         );
 
         if (currentChatId && !ac.signal.aborted) {
@@ -133,6 +139,11 @@ export function useChat(currentChatId?: string) {
   const sendMessage = useCallback(
     async (userInput: string) => {
       if (!userInput.trim()) return;
+
+      if (!userId) {
+        console.error("Attempted to send message without User ID.");
+        return; 
+      }
 
       if (!currentChatId) {
         // Create new chat

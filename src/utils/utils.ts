@@ -4,6 +4,7 @@ import { API_BASE, API_ROUTES } from "~/lib/api";
 
 export async function sendChatMessageStream(
   messages: Message[],
+  userId: string,
   onToken: (token: string) => void,
   onImages?: (images: ChatImage[]) => void,
   signal?: AbortSignal
@@ -15,7 +16,7 @@ export async function sendChatMessageStream(
       Accept: "text/event-stream",
       "Cache-Control": "no-cache",
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ messages, userId }),
     signal,
   });
 

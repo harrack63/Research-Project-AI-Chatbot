@@ -6,6 +6,7 @@ import { useChat } from "~/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { useParams } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 
 const SCROLL_THRESHOLD = 3000;
 
@@ -16,7 +17,11 @@ type ChatAreaProps = {
 export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
   const params = useParams();
   const chatId = params?.id as string | undefined;
-  const { messages, isLoading, sendMessage, stopResponse } = useChat(chatId);
+  const { user } = useUser();
+  const userId = user?.id || "";
+
+  const { messages, isLoading, sendMessage, stopResponse } = useChat(userId, chatId);
+
   const [input, setInput] = useState("");
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [dotPosition, setDotPosition] = useState(0);

@@ -299,12 +299,15 @@ class PersonalizedChatbot:
         self.logger.info(f"Received user message (streaming): {user_msg}")
         
         state = self.load()
+        prefs = self.load_preferences() 
+
         state.update({
             "user_msg": user_msg,
             "user_msg_timestamp": datetime.now().isoformat(),
             "persona_update_status": "pre_chat",
             "assistant_msg": "",
             "assistant_msg_timestamp": datetime.now().isoformat(),
+            "user_preferences": prefs, # <--- Store in state
         })
 
         # Queue to pass tokens from the background thread to this generator
@@ -569,6 +572,9 @@ class PersonalizedChatbot:
         persona = state["persona"]
         chat_history = self.chat_history_state["chat_history"]
         
+        user_prefs = state.get("user_preferences", {})
+        prefs_str = json.dumps(user_prefs, indent=2) if user_prefs else "None"
+        
         # Check for streaming callback
         stream_callback = config.get("configurable", {}).get("stream_callback")
 
@@ -582,14 +588,20 @@ class PersonalizedChatbot:
         retrieved_context = self.retrieve_context(user_msg)
 
         # update persona
-        persona = self.update_persona(user_msg, persona)
+        self._run_background_persona_update(user_msg, persona)
 
         # Prepare Prompt (Replicating your logic, keeping it brief here)
         path_prompts = os.path.join(PROMPTS_DIR, "chat")
         with open(os.path.join(path_prompts, "chat_system.txt"), "r") as f:
             system_prompt = f.read()
         
-        user_prompt = f"Full Persona: {persona}\nPrevious chat history: {chat_history_str}\nUser Query: {user_msg}\nContext from retrieval (if any):\n{retrieved_context}"
+        user_prompt = (
+            f"User Preferences (Critical Constraints): {prefs_str}\n"
+            f"Full Persona: {persona}\n"
+            f"Previous chat history: {chat_history_str}\n"
+            f"User Query: {user_msg}\n"
+            f"Context from retrieval (if any):\n{retrieved_context}"
+        )
         messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
 
         # === STREAMING LOGIC ===
@@ -631,7 +643,7 @@ class PersonalizedChatbot:
 
         retrieved_context = self.retrieve_context(user_msg)
         # update persona
-        persona = self.update_persona(user_msg, persona)
+        self._run_background_persona_update(user_msg, persona)
 
         messages = [
             {
@@ -909,6 +921,32 @@ class PersonalizedChatbot:
             f"{func.__name__} execution time: {end_time - start_time} seconds"
         )
         return result
+    
+    def _run_background_persona_update(self, user_msg: str, current_persona: PersonaState):
+        """
+        Runs persona update in a background thread so it doesn't block the chat.
+        """
+        def task():
+            try:
+                self.logger.info("Starting background persona update...")
+                # 1. Run the heavy LLM call
+                # Note: We call the original update logic here, but we don't return it to the main flow
+                new_persona_state = self.update_persona(user_msg, current_persona)
+                
+                # 2. Thread-safe(ish) Save
+                # We load the latest state from disk to ensure we don't overwrite 
+                # any chat history changes that happened while we were thinking.
+                if os.path.exists(self.fp_state):
+                    saved_state = self._load_state_from_file(self.fp_state)
+                    saved_state['persona'] = new_persona_state
+                    self._save_state_to_file(saved_state, self.fp_state)
+                    self.logger.info("Background persona update SAVED to disk.")
+            except Exception as e:
+                self.logger.error(f"Background persona update failed: {e}")
+
+        # Fire and forget
+        t = threading.Thread(target=task)
+        t.start()
 
 
 def main():

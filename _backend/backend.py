@@ -54,7 +54,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message]
-    userId: Optional[str] = "default_user"
+    userId: str
 
 
 class ChatResponse(BaseModel):
@@ -123,7 +123,10 @@ async def chat_endpoint_stream(req: ChatRequest):
     async def stream_response():
         try:
             # Initialize Chatbot with the specific user ID and GPT-5
-            user_id = req.userId or "default_user"
+            user_id = req.userId
+            
+            if not user_id:
+                raise ValueError("User ID is required for chat session.")
             
             # Use cached instance instead of creating new one every time
             chatbot = get_chatbot_instance(user_id)
