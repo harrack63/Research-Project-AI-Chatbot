@@ -274,21 +274,23 @@ class PersonalizedChatbot:
             "assistant_msg_timestamp": datetime.now().isoformat(),
         })
         
-        full_response = ""
-        # Process through graph and stream updates
-        for event in self.graph_agent.stream(state, stream_mode="updates"):
-            for node_name, node_state in event.items():
-                if "assistant_msg" in node_state and node_state["assistant_msg"]:
-                    # In a real streaming setup, this would yield partial chunks.
-                    # Currently, nodes return full responses, so we yield the result.
-                    chunk = node_state["assistant_msg"]
-                    yield chunk
-                    full_response = chunk
+        # Process through graph (blocking call)
+        final_state = self.graph_agent.invoke(state)
+        full_response = final_state.get("assistant_msg", "")
         
-        # Save state
-        final_state = state
-        final_state["assistant_msg"] = full_response
+        # Ensure full_response is a string
+        if not isinstance(full_response, str):
+            full_response = str(full_response) if full_response else ""
+        
+        self.logger.info(f"LLM Response length: {len(full_response)}")
+        
+        # Stream the response token by token
+        if full_response:
+            for token in full_response.split():
+                yield token + " "
+        
         self.save(final_state)
+        
     @log_execution_time
     def update_persona(
         self,
