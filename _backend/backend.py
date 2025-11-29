@@ -61,6 +61,20 @@ class ChatResponse(BaseModel):
     messages: List[Message]
 
 
+chatbot_instances = {}
+
+def get_chatbot_instance(user_id: str):
+    if user_id not in chatbot_instances:
+        logger.info(f"Initializing new chatbot instance for {user_id}")
+        # Set debug=True so logs appear in your console (stdout)
+        chatbot_instances[user_id] = PersonalizedChatbot(
+            exp_name=user_id, 
+            llm_model_name="OpenAI/gpt-5", 
+            user_id=user_id,
+            debug=True 
+        )
+    return chatbot_instances[user_id]
+
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
@@ -111,21 +125,10 @@ async def chat_endpoint_stream(req: ChatRequest):
             # Initialize Chatbot with the specific user ID and GPT-5
             user_id = req.userId or "default_user"
             
-            # Use the experiment name logic or map user_id to it
-            chatbot = PersonalizedChatbot(
-                exp_name=user_id, 
-                llm_model_name="OpenAI/gpt-5-mini",
-                user_id=user_id,
-                embedding_function=GLOBAL_EMBEDDINGS
-            )
+            # Use cached instance instead of creating new one every time
+            chatbot = get_chatbot_instance(user_id)
             
             user_msg = req.messages[-1].content
-            
-            # Call the generator
-            # Since chatbot.chat_stream yields tokens (strings), we wrap them in SSE format
-            
-            # We need to run the blocking generator in a thread to not block the async loop
-            # OR iterate it if it was async. chat_stream is sync generator.
             
             q: asyncio.Queue[bytes] = asyncio.Queue()
             SENTINEL = b"__DONE__"
@@ -133,12 +136,11 @@ async def chat_endpoint_stream(req: ChatRequest):
             def pump():
                 try:
                     for token in chatbot.chat_stream(user_msg):
-                        # Clean token for JSON
                         frame = f"data: {json.dumps({'token': token})}\n\n".encode('utf-8')
                         q.put_nowait(frame)
                     q.put_nowait(f"data: {json.dumps({'done': True})}\n\n".encode('utf-8'))
                 except Exception as e:
-                    logger.error(f"Streaming error: {e}")
+                    logger.error(f"Streaming error in pump: {e}")
                     err = f"data: {json.dumps({'error': str(e)})}\n\n".encode('utf-8')
                     q.put_nowait(err)
                 finally:
@@ -151,6 +153,7 @@ async def chat_endpoint_stream(req: ChatRequest):
                 if frame is SENTINEL:
                     break
                 yield frame
+                # Yield control to event loop to ensure liveness
                 await asyncio.sleep(0)
             
         except Exception as e:

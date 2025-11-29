@@ -3,7 +3,7 @@ import json
 from typing import List, Dict, Any, Optional
 from langchain_huggingface import HuggingFaceEmbeddings
 from pymilvus import MilvusClient, CollectionSchema, FieldSchema, DataType
-from langchain_openai import OpenAIEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from tqdm import tqdm
 from dotenv import load_dotenv
 
@@ -33,7 +33,9 @@ class MilvusUtil:
             self.client = MilvusClient(uri=self.uri, db_name="default")
         
         # Initialize embedding model
-        self.embedding_model = OpenAIEmbeddings(model="text-embedding-3-small")
+        self.embedding_model = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2"
+        )
         self.embedding_dim = len(self.embedding_model.embed_query("test"))
         
         self._ensure_user_prefs_collection()
