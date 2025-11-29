@@ -162,7 +162,7 @@ class TensorblockClientRunner:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=prompt,
-            max_tokens=max_tokens,
+            max_completion_tokens=max_tokens,
             stream=True,  # ← Enable streaming
         )
         return response

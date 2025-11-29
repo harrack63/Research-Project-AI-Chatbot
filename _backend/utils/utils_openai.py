@@ -221,16 +221,15 @@ class OpenAIClientRunner:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=prompt,
-            max_tokens=max_tokens,
-            stream=True,  # ← Enable streaming
+            max_completion_tokens=max_tokens,
+            stream=True,  
         )
         return response
-
     def call_gpt_chat(self, prompt, max_tokens: int = 1024):
         response = self.client.chat.completions.create(
             model=self.model,
             messages=prompt,
-            max_tokens=max_tokens,
+            max_completion_tokens=max_tokens,
         )
         # max_tokens: Specifies the maximum number of tokens to generate in the response. If the response would be longer than this number of tokens, it will be truncated.
         return response.choices[0].message.content
@@ -243,8 +242,7 @@ class OpenAIClientRunner:
             return self.call_gpt_chat(prompt, max_tokens=max_tokens)
 
     def __call__(self, prompt, max_tokens: int = 1024, stream: bool = False):
-        return self._call_gpt_retry(prompt, max_tokens=max_tokens, stream = stream)
-
+        return self._call_gpt_retry(prompt, max_tokens=max_tokens, stream=stream)
 
 if __name__ == "__main__":
     # Load environment variables from .env file

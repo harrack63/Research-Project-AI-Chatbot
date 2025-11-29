@@ -16,6 +16,8 @@ from datetime import datetime
 import logging
 import functools
 import time
+import queue
+import threading
 
 from state_persona import PersonaState
 from config import VECTORDB_NAME_CHAT_HISTORY, MILVUS_URI, PROMPTS_DIR
@@ -89,18 +91,14 @@ class PersonalizedChatbot:
 
     def __init__(
         self,
-        llm_model_name: str = "OpenAI/gpt-5-mini", # Updated default
+        llm_model_name: str = "gpt-5",
         exp_name: str = "debug",
         debug: bool = False,
-        user_id: str = "default_user" # Added user_id
+        user_id: str = "default_user",
+        embedding_function = None
     ):
         """
         Initialize the personalized chatbot.
-
-        Args:
-            exp_name: The experiment name for state persistence
-            llm_model_name: The LLM model to use for agents
-            debug: Enable debug mode for detailed logging
         """
         start_time = datetime.now()
         self.debug = debug
@@ -108,13 +106,17 @@ class PersonalizedChatbot:
         self.exp_name = exp_name
         self.llm_model_name = llm_model_name
         self.user_id = user_id
+        
+        # Streaming control
+        self.token_queue = queue.Queue()
+        self.is_streaming = False
 
         # Ensure experiment work directory exists before setting up logging
         self.workdir = f"out/{self.exp_name}"
         if not os.path.exists(self.workdir):
             os.makedirs(self.workdir)
 
-        # Set up logging to file 
+        # Set up logging to file
         self.init_logger(workdir=self.workdir)
         self.logger.info(
             "=" * 10 + f" Initializing {self.__class__.__name__}... " + "=" * 10
@@ -129,26 +131,28 @@ class PersonalizedChatbot:
             if llm_model_name.startswith("OpenAI/"):
                 llm_model_name = llm_model_name.split("/")[1]
             self.llm_runner = OpenAIClientRunner(model=llm_model_name)
-
-        self.logger.info(f"Initialized llm_runner with model: {llm_model_name}")
-        # self.agent_update_persona = AgentUpdatePersona(
-        #     model=llm_model_name, llm_runner_name=llm_runner_name
-        # )
-        # self.agent_chat = AgentChat(
-        #     model=llm_model_name, llm_runner_name=llm_runner_name
-        # )
-        # self.logger.info(
-        #     f"Initialized agent_update_persona with model: {self.agent_update_persona.model}; llm_runner: {llm_runner_name}"
-        # )
-        # self.logger.info(
-        #     f"Initialized agent_chat with model: {self.agent_chat.model}; llm_runner: {llm_runner_name}"
-        # )
+        
+        # Robust Milvus Init
+        self.milvus_util = None
+        if MILVUS_URI:
+             try:
+                self.milvus_util = MilvusUtil(uri=MILVUS_URI)
+                self.logger.info("Milvus initialized successfully.")
+             except Exception as e:
+                self.logger.warning(f"Milvus init failed, continuing without Milvus: {e}")
+        
 
         # Initialize vector database for chat history
+        
+        # Caches embedding function => increased performance
+        if embedding_function is None:
+             # Fallback if not passed
+             embedding_function = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+
         load_history_start_time = datetime.now()
         self.fp_vectordb = f"{self.workdir}/{VECTORDB_NAME_CHAT_HISTORY}"
         self.vectordb = Chroma(
-            embedding_function=HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2"),
+            embedding_function=embedding_function,
             persist_directory=self.fp_vectordb,
         )
         self.logger.info(
@@ -156,23 +160,11 @@ class PersonalizedChatbot:
         )
         self.fp_chat_history = f"{self.workdir}/chat_history.json"
 
-        # Initialize Milvus Database (optional)
-        try:
-            self.milvus_util = MilvusUtil(uri=MILVUS_URI) if MILVUS_URI else None
-            # Optionally test connectivity here by calling a lightweight method
-            if self.milvus_util:
-                # e.g., self.milvus_util.list_collections()  # optional
-                pass
-        except Exception as e:
-            self.logger.warning(f"Milvus init failed, continuing without Milvus: {e}")
-            self.milvus_util = None
-
         # Initialize the conversation graph
         self.graph_agent = self._build_graph()
 
         self.fp_state = f"{self.workdir}/chatbot_state.json"
 
-        # Log the initialization
         self.logger.info(
             f"Initialized {self.__class__.__name__} with exp_name: {exp_name}"
         )
@@ -180,14 +172,54 @@ class PersonalizedChatbot:
             f"__init__ executed in {(datetime.now() - start_time).total_seconds():.2f} seconds"
         )
         
-        # Initialize Milvus utils
-        if not self.milvus_util and MILVUS_URI:
-             self.milvus_util = MilvusUtil(uri=MILVUS_URI)
         
+    # Helper methods    
     def load_preferences(self) -> dict:
+        """Fetch user preferences from Milvus."""
         if self.milvus_util:
-            return self.milvus_util.get_user_preferences(self.user_id)
+            try:
+                prefs = self.milvus_util.get_user_preferences(self.user_id)
+                self.logger.info(f"Loaded preferences for {self.user_id}: {prefs.keys()}")
+                return prefs
+            except Exception as e:
+                self.logger.error(f"Error loading preferences: {e}")
+                return {}
         return {}
+
+    def _format_preferences_context(self, prefs: dict) -> str:
+        """Format preferences dict into a readable string for the LLM."""
+        if not prefs:
+            return ""
+        
+        context = "\n\n=== USER PREFERENCES & PROFILE ===\n"
+        if "chatName" in prefs and prefs["chatName"]:
+            context += f"Chat/Topic Name: {prefs['chatName']}\n"
+        if "personalInfo" in prefs and prefs["personalInfo"]:
+            context += f"Personal Info / Constraints: {prefs['personalInfo']}\n"
+        context += "==================================\n"
+        return context
+
+    def _stream_llm_response(self, messages: list) -> str:
+        """Helper to handle LLM streaming to queue and return full string."""
+        if self.is_streaming:
+            full_response = ""
+            # Call runner with stream=True
+            response_stream = self.llm_runner(messages, stream=True)
+            
+            for chunk in response_stream:
+                # Handle OpenAI/Tensorblock delta format
+                content = None
+                if hasattr(chunk.choices[0].delta, "content"):
+                    content = chunk.choices[0].delta.content
+                
+                if content:
+                    self.token_queue.put(content)
+                    full_response += content
+            
+            return full_response
+        else:
+            # Non-streaming fallback
+            return self.llm_runner(messages, stream=False)
 
     @log_execution_time
     def _build_graph(self) -> StateGraph:
@@ -261,9 +293,10 @@ class PersonalizedChatbot:
     def chat_stream(self, user_msg: str):
         """
         Process a chat message and stream the response.
-        Yields tokens as they become available.
+        Uses a threaded approach to run the graph while yielding tokens from a queue.
         """
-        self.logger.info(f"Received user message: {user_msg}")
+        self.logger.info(f"Received user message (stream): {user_msg}")
+        self.is_streaming = True
         
         state = self.load()
         state.update({
@@ -273,23 +306,33 @@ class PersonalizedChatbot:
             "assistant_msg": "",
             "assistant_msg_timestamp": datetime.now().isoformat(),
         })
+
+        # Define a runner function for the thread
+        def run_graph():
+            try:
+                final_state = self.graph_agent.invoke(state)
+                # Save state after graph completes
+                self.save(final_state)
+            except Exception as e:
+                self.logger.error(f"Error in graph execution thread: {e}")
+                self.token_queue.put(f"[ERROR: {str(e)}]")
+            finally:
+                # Signal the end of the stream
+                self.token_queue.put(None)
+
+        # Start graph execution in a separate thread
+        t = threading.Thread(target=run_graph)
+        t.start()
+
+        # Yield tokens from queue as they appear
+        while True:
+            token = self.token_queue.get()
+            if token is None:
+                break
+            yield token
         
-        # Process through graph (blocking call)
-        final_state = self.graph_agent.invoke(state)
-        full_response = final_state.get("assistant_msg", "")
-        
-        # Ensure full_response is a string
-        if not isinstance(full_response, str):
-            full_response = str(full_response) if full_response else ""
-        
-        self.logger.info(f"LLM Response length: {len(full_response)}")
-        
-        # Stream the response token by token
-        if full_response:
-            for token in full_response.split():
-                yield token + " "
-        
-        self.save(final_state)
+        t.join()
+        self.is_streaming = False
         
     @log_execution_time
     def update_persona(
@@ -509,69 +552,99 @@ class PersonalizedChatbot:
     @log_execution_time
     def _meal_planner_node(self, state: ChatbotState) -> str:
         """
-        Meal planner node.
+        Meal planner node with Streaming + Preferences.
         """
         self.debug_counter += 1
         self.logger.info(f"=== {self.debug_counter}: In meal_planner ===")
 
         user_msg = state["user_msg"]
         persona = state["persona"]
-        chat_history = self.chat_history_state["chat_history"]
+        
+        # 1. Load User Preferences
+        prefs = self.load_preferences()
+        prefs_context = self._format_preferences_context(prefs)
 
+        chat_history = self.chat_history_state["chat_history"]
         if len(chat_history) > 2:
-            chat_history = "\n".join(
-                [f"{m['role']}: {m['content']}" for m in chat_history[-2:]]
-            )
+            chat_history_str = "\n".join([f"{m['role']}: {m['content']}" for m in chat_history[-2:]])
         else:
-            chat_history = ""
+            chat_history_str = ""
 
         retrieved_context = self.retrieve_context(user_msg)
-
-        # update persona
         persona = self.update_persona(user_msg, persona)
 
-        response = self._meal_planner(
-            persona, user_msg, chat_history, retrieved_context
-        )
-        return Command(goto=END, update={"persona": persona, "assistant_msg": response})
+        # 2. Build Prompt
+        path_prompts = os.path.join(PROMPTS_DIR, "chat")
+        
+        # Fallback prompts if files missing
+        user_instructions = "Answer the user query based on persona and history."
+        system_prompt = "You are a helpful meal planner assistant."
+
+        try:
+            with open(os.path.join(path_prompts, "chat_instructions.txt"), "r") as f:
+                user_instructions = f.read()
+            with open(os.path.join(path_prompts, "chat_system.txt"), "r") as f:
+                system_prompt = f.read()
+        except FileNotFoundError:
+            pass
+
+        user_prompt = user_instructions
+        user_prompt += f"Full Persona: {persona}\n"
+        user_prompt += f"Previous chat history: {chat_history_str}\n"
+        user_prompt += f"User Query: {user_msg}\n"
+        user_prompt += f"Context from retrieval (if any):\n{retrieved_context}\n"
+        
+        # Inject Preferences
+        user_prompt += prefs_context
+
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.append({"role": "user", "content": user_prompt})
+
+        # 3. Stream Response
+        response = self._stream_llm_response(messages)
+        
+        return Command(goto="update_history", update={"persona": persona, "assistant_msg": response, "assistant_msg_timestamp": datetime.now().isoformat()})
 
     @log_execution_time
     def _chitchat_node(self, state: ChatbotState) -> str:
         """
-        Chitchat node.
+        Chitchat node with Streaming + Preferences.
         """
         self.debug_counter += 1
         self.logger.info(f"=== {self.debug_counter}: In chitchat ===")
 
         user_msg = state["user_msg"]
         persona = state["persona"]
-        chat_history = self.chat_history_state["chat_history"]
+        
+        # 1. Load User Preferences
+        prefs = self.load_preferences()
+        prefs_context = self._format_preferences_context(prefs)
 
+        chat_history = self.chat_history_state["chat_history"]
         if len(chat_history) > 2:
-            chat_history = "\n".join(
-                [f"{m['role']}: {m['content']}" for m in chat_history[-2:]]
-            )
+            chat_history_str = "\n".join([f"{m['role']}: {m['content']}" for m in chat_history[-2:]])
         else:
-            chat_history = ""
+            chat_history_str = ""
 
         retrieved_context = self.retrieve_context(user_msg)
-
-        # update persona
         persona = self.update_persona(user_msg, persona)
 
         messages = [
             {
                 "role": "system",
-                "content": "You are an chatbot assistant. You are given a user message and a persona update status.",
+                "content": "You are a chatbot assistant. Use the provided persona, preferences, and context to answer.",
             },
             {
                 "role": "user",
-                "content": f"Persona: {persona}\nRetrieved context: {retrieved_context}\nChat history: {chat_history}\nUser message: {user_msg}\n",
+                "content": f"Persona: {persona}\n{prefs_context}\nRetrieved context: {retrieved_context}\nChat history: {chat_history_str}\nUser message: {user_msg}\n",
             },
         ]
-        response = self.llm_runner(messages, max_tokens=None)
+        
+        # 2. Stream Response
+        response = self._stream_llm_response(messages)
+
         return Command(
-            goto=END,
+            goto="update_history",
             update={
                 "persona": persona,
                 "assistant_msg": response,
@@ -815,47 +888,6 @@ class PersonalizedChatbot:
             f"{func.__name__} execution time: {end_time - start_time} seconds"
         )
         return result
-    
-    @log_execution_time
-    def _meal_planner(
-        self,
-        persona: PersonaState,
-        user_msg: str,
-        chat_history: str,
-        retrieved_context: str,
-    ):
-        def get_focused_persona(persona: PersonaState):
-            return persona
-
-        path_prompts = os.path.join(
-            PROMPTS_DIR,
-            "chat",
-        )
-
-        path_prompt = os.path.join(path_prompts, "chat_instructions.txt")
-        assert os.path.exists(path_prompt)
-        with open(path_prompt, "r") as f:
-            user_instructions = f.read()
-
-        path_system = os.path.join(path_prompts, "chat_system.txt")
-        assert os.path.exists(path_system)
-        with open(path_system, "r") as f:
-            system_prompt = f.read()
-
-        persona_brief = get_focused_persona(persona)
-
-        user_prompt = user_instructions
-        user_prompt += f"Full Persona: {persona}\n"
-        user_prompt += f"Relevant Persona (focus): {persona_brief}\n"
-        user_prompt += f"Previous chat history: {chat_history}\n"
-        user_prompt += f"User Query: {user_msg}\n"
-        user_prompt += f"Context from retrieval (if any):\n{retrieved_context}"
-
-        messages = [{"role": "system", "content": system_prompt}]
-        messages.append({"role": "user", "content": user_prompt})
-
-        response = self.llm_runner(messages, max_tokens=None)
-        return response
 
 
 def main():

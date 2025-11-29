@@ -17,6 +17,7 @@ import time
 import os
 
 from fastapi.responses import StreamingResponse
+from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 import json
 
 import asyncio
@@ -27,6 +28,10 @@ logger = logging.getLogger(__name__)
 logger.info("Initializing backend")
 
 app = FastAPI()
+
+logger.info("Loading Embedding Model into RAM... (This happens only once)")
+GLOBAL_EMBEDDINGS = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+logger.info("Embedding Model Loaded.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -110,7 +115,8 @@ async def chat_endpoint_stream(req: ChatRequest):
             chatbot = PersonalizedChatbot(
                 exp_name=user_id, 
                 llm_model_name="OpenAI/gpt-5-mini",
-                user_id=user_id
+                user_id=user_id,
+                embedding_function=GLOBAL_EMBEDDINGS
             )
             
             user_msg = req.messages[-1].content
@@ -128,7 +134,7 @@ async def chat_endpoint_stream(req: ChatRequest):
                 try:
                     for token in chatbot.chat_stream(user_msg):
                         # Clean token for JSON
-                        frame = f"data: {json.dumps({'token': token.strip()})}\n\n".encode('utf-8')
+                        frame = f"data: {json.dumps({'token': token})}\n\n".encode('utf-8')
                         q.put_nowait(frame)
                     q.put_nowait(f"data: {json.dumps({'done': True})}\n\n".encode('utf-8'))
                 except Exception as e:
