@@ -393,13 +393,24 @@ class PersonalizedChatbot:
 
         messages = [{"role": "system", "content": system_prompt}]
         messages.append({"role": "user", "content": user_prompt})
-        response = self.llm_runner(messages, max_tokens=None)
-
+        
+        response_str = self.llm_runner(messages, max_tokens=None)
+        
         try:
-            current_persona.update(response)
+            clean_str = response_str.replace("```json", "").replace("```", "").strip()
+            new_data = json.loads(clean_str) 
+
+            if isinstance(new_data, dict):
+                current_persona.update(new_data)
+                self.logger.info(f"Persona updated successfully with keys: {list(new_data.keys())}")
+            else:
+                self.logger.warning(f"Persona update failed: LLM returned {type(new_data)} instead of dict")
+                
+        except json.JSONDecodeError:
+            self.logger.warning(f"Persona update failed: Could not parse JSON from: {response_str[:50]}...")
         except Exception as e:
             self.logger.warning(f"Error updating persona: {e}")
-            current_persona = current_persona
+            
         return current_persona
 
     # @log_execution_time
@@ -522,7 +533,7 @@ class PersonalizedChatbot:
             assistant_msg += "End of retrieved context"
 
             return Command(
-                goto=END,
+                goto="update_history",
                 update={
                     "assistant_msg": assistant_msg,
                     "assistant_msg_timestamp": datetime.now().isoformat(),
@@ -538,7 +549,7 @@ class PersonalizedChatbot:
                 else:
                     assistant_msg += "=" * 80 + "\n\n"
             return Command(
-                goto=END,
+                goto="update_history",
                 update={
                     "assistant_msg": assistant_msg,
                     "assistant_msg_timestamp": datetime.now().isoformat(),
@@ -548,7 +559,7 @@ class PersonalizedChatbot:
             self.logger.info("Debugging print model name")
             assistant_msg = f"Model name: {self.agent_chat.model}"
             return Command(
-                goto=END,
+                goto="update_history",
                 update={
                     "assistant_msg": assistant_msg,
                     "assistant_msg_timestamp": datetime.now().isoformat(),
@@ -562,7 +573,7 @@ class PersonalizedChatbot:
             )
             assistant_msg_timestamp = datetime.now().isoformat()
             return Command(
-                goto=END,
+                goto="update_history",
                 update={
                     "assistant_msg": assistant_msg,
                     "assistant_msg_timestamp": assistant_msg_timestamp,
@@ -633,36 +644,36 @@ class PersonalizedChatbot:
     @log_execution_time
     def _chitchat_node(self, state: ChatbotState, config: dict) -> Command[Literal["update_history"]]:
         """
-        Chitchat node with streaming support.
+        Chitchat node: FAST response, NO Retrieval, but AWARE of Preferences.
         """
         self.debug_counter += 1
         self.logger.info(f"=== {self.debug_counter}: In chitchat ===")
 
         user_msg = state["user_msg"]
         persona = state["persona"]
-        chat_history = self.chat_history_state["chat_history"]
+        
+        # No retrieved informational context
+        # Will only confuse LLM
+        retrieved_context = "" 
+
+        # Get the user preferences
+        user_prefs = state.get("user_preferences", {})
+        prefs_str = json.dumps(user_prefs, indent=2) if user_prefs else "None"
 
         # Check for streaming callback
         stream_callback = config.get("configurable", {}).get("stream_callback")
-
-        if len(chat_history) > 2:
-            chat_history_str = "\n".join([f"{m['role']}: {m['content']}" for m in chat_history[-2:]])
-        else:
-            chat_history_str = ""
-
-        retrieved_context = self.retrieve_context(user_msg)
-        # update persona
-        self._run_background_persona_update(user_msg, persona)
+        
+        # We remind the bot of the persona/prefs, but don't burden it with recipes.
+        system_prompt = (
+            "You are a friendly, empathetic chat assistant. "
+            "Engage in normal conversation. "
+            "Do NOT give medical advice or recipes unless explicitly asked (if asked, refer them to the meal planner). " # Change this if more nodes are added
+            f"User Preferences/Context: {prefs_str}"
+        )
 
         messages = [
-            {
-                "role": "system",
-                "content": "You are an chatbot assistant. You are given a user message and a persona update status.",
-            },
-            {
-                "role": "user",
-                "content": f"Persona: {persona}\nRetrieved context: {retrieved_context}\nChat history: {chat_history_str}\nUser message: {user_msg}\n",
-            },
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"User message: {user_msg}\n"}, # No chat history needed for simple ping-pong, or keep last 2 turns if you want
         ]
         
         # === STREAMING LOGIC ===
@@ -745,46 +756,47 @@ class PersonalizedChatbot:
         Returns:
             Retrieved context as string
         """
-        context = ""
+        chroma_text = ""
+        milvus_text = ""
         
-        def get_chroma():
+        
+        def run_chroma():
             try:
-                docs = self.vectordb.similarity_search(query, k=5)
-                self.logger.debug(
-                    f"Retrieved context for:\nquery:\n{query}\nretrieved context:\n{context}"
-                )
+                # Use 'self.vectordb' directly
+                docs = self.vectordb.similarity_search(query, k=3)
                 return "\n# Chat History\n" + "\n".join(d.page_content for d in docs)
             except Exception as e:
-                self.logger.warning(f"Chroma Error: {e}")
+                self.logger.warning(f"Chroma retrieval failed: {e}")
                 return ""
 
-        def get_milvus():
+        def run_milvus():
             try:
-                # Use the existing Milvus util
-                if not self.milvus_util: return ""
+                # Trigger the lazy loader safely
+                if not self.milvus_util: 
+                    return ""
                 
-                # Can also parrellelize search on multiple queries if nessecary (future dev)
-                search_results = self.milvus_util.search_vectors(
+                results = self.milvus_util.search_vectors(
                     collection_name="mayo_clinic_passage", query_text=query, limit=3
                 )
                 txt = "\n# Diabetes Knowledge Base\n"
-                for i, result in enumerate(search_results, 1):
-                    context += f"{i}. ID: {result['id']}, Score: {result['score']:.4f}\n"
-                    context += f"   Text: {result['text'][:100]}...\n"
+                for i, r in enumerate(results, 1):
+                    # Safety check for 'text' key
+                    txt += f"{i}. {r.get('text', '')[:300]}...\n"
                 return txt
             except Exception as e:
-                self.logger.warning(f"Milvus Error: {e}")
+                self.logger.warning(f"Milvus retrieval failed: {e}")
                 return ""
 
         # Execute in parallel
         with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_chroma = executor.submit(get_chroma)
-            future_milvus = executor.submit(get_milvus)
+            future_chroma = executor.submit(run_chroma)
+            future_milvus = executor.submit(run_milvus)
             
-            context += future_chroma.result()
-            context += future_milvus.result()
+            # Wait for results
+            chroma_text = future_chroma.result()
+            milvus_text = future_milvus.result()
 
-        return context
+        return chroma_text + milvus_text
 
     @log_execution_time
     def save(self, state: ChatbotState | ChatHistoryState) -> None:
