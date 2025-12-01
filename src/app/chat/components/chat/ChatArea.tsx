@@ -114,7 +114,6 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
                 <ChatMessage 
                 key={message.id} 
                 message={message} 
-                isStreaming={isLoading && index === messages.length - 1 && message.role === 'assistant'}
               />
               ))}
                {isLoading &&
