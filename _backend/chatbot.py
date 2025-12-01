@@ -18,6 +18,7 @@ import functools
 import time
 import queue
 import threading
+import concurrent.futures
 
 from state_persona import PersonaState
 from config import VECTORDB_NAME_CHAT_HISTORY, MILVUS_URI, PROMPTS_DIR
@@ -728,7 +729,7 @@ class PersonalizedChatbot:
     @log_execution_time
     def retrieve_context(self, query: str) -> str:
         """
-        Retrieve relevant context from vector store.
+        Retrieve relevant context from vector store (in parrallel => speed boost for first time to token(FTT)).
 
         Args:
             query: The user query to search for
@@ -736,36 +737,45 @@ class PersonalizedChatbot:
         Returns:
             Retrieved context as string
         """
-
         context = ""
-
-        # Retrieve relevant chat history
-        try:
-            docs = self.vectordb.similarity_search(query, k=5)
-            context += "\n# Chat History\n"
-            context += "\n".join(d.page_content for d in docs)
-            self.logger.debug(
-                f"Retrieved context for:\nquery:\n{query}\nretrieved context:\n{context}"
-            )
-        except Exception as e:
-            self.logger.warning(f"Error in retrieving chat history: {e}")
         
-        # Retrieve relevant knowledge base
-        try:
-            search_results = self.milvus_util.search_vectors(
-                collection_name="mayo_clinic_passage", query_text=query, limit=5
-            )
-            context += "\n# Diabetes Knowledge Base\n"
+        def get_chroma():
+            try:
+                docs = self.vectordb.similarity_search(query, k=5)
+                self.logger.debug(
+                    f"Retrieved context for:\nquery:\n{query}\nretrieved context:\n{context}"
+                )
+                return "\n# Chat History\n" + "\n".join(d.page_content for d in docs)
+            except Exception as e:
+                self.logger.warning(f"Chroma Error: {e}")
+                return ""
 
-            for i, result in enumerate(search_results, 1):
-                context += f"{i}. ID: {result['id']}, Score: {result['score']:.4f}\n"
-                context += f"   Text: {result['text'][:100]}...\n"
+        def get_milvus():
+            try:
+                # Use the existing Milvus util
+                if not self.milvus_util: return ""
+                
+                # Can also parrellelize search on multiple queries if nessecary (future dev)
+                search_results = self.milvus_util.search_vectors(
+                    collection_name="mayo_clinic_passage", query_text=query, limit=3
+                )
+                txt = "\n# Diabetes Knowledge Base\n"
+                for i, result in enumerate(search_results, 1):
+                    context += f"{i}. ID: {result['id']}, Score: {result['score']:.4f}\n"
+                    context += f"   Text: {result['text'][:100]}...\n"
+                return txt
+            except Exception as e:
+                self.logger.warning(f"Milvus Error: {e}")
+                return ""
 
-            self.logger.debug(
-                f"Retrieved context for:\nquery:\n{query}\nretrieved context:\n{context}"
-            )
-        except Exception as e:
-            self.logger.warning(f"Error in retrieving knowledge base: {e}")
+        # Execute in parallel
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_chroma = executor.submit(get_chroma)
+            future_milvus = executor.submit(get_milvus)
+            
+            context += future_chroma.result()
+            context += future_milvus.result()
+
         return context
 
     @log_execution_time

@@ -69,7 +69,7 @@ def get_chatbot_instance(user_id: str):
         # Set debug=True so logs appear in your console (stdout)
         chatbot_instances[user_id] = PersonalizedChatbot(
             exp_name=user_id, 
-            llm_model_name="OpenAI/gpt-5", 
+            llm_model_name="OpenAI/gpt-5-mini", 
             user_id=user_id,
             debug=True 
         )
@@ -122,7 +122,7 @@ async def chat_endpoint_stream(req: ChatRequest):
     
     async def stream_response():
         try:
-            # Initialize Chatbot with the specific user ID and GPT-5
+            # Initialize Chatbot with the specific user ID and GPT-5-mini
             user_id = req.userId
             
             if not user_id:
