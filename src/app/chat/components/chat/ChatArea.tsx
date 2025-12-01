@@ -6,6 +6,7 @@ import { useChat } from "~/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { useParams } from "next/navigation";
+import TextareaAutosize from 'react-textarea-autosize';
 import { useUser } from "@clerk/nextjs";
 
 const SCROLL_THRESHOLD = 3000;
@@ -109,8 +110,12 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
             </div>
           ) : (
             <div className="space-y-6 max-w-2xl mx-auto w-full">
-              {messages.map((message) => (
-                <ChatMessage key={message.id} message={message} />
+              {messages.map((message, index) => (
+                <ChatMessage 
+                key={message.id} 
+                message={message} 
+                isStreaming={isLoading && index === messages.length - 1 && message.role === 'assistant'}
+              />
               ))}
                {isLoading &&
                 // Find the latest assistant message (placeholder added by useChat)
@@ -166,15 +171,16 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
       {/* Fixed input area at bottom */}
       <div className="absolute bottom-0 left-0 right-0 pt-8 pb-6 px-6 z-10">
         <div className="flex gap-3 max-w-2xl mx-auto relative">
-          <textarea
-            ref={textareaRef}
+          <TextareaAutosize
+            ref={textareaRef} // Keep the ref for keyboard shortcuts
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type your prompt to the bot..."
-            rows={3}
+            minRows={3}
+            maxRows={12} // Limits growth so it doesn't cover the whole screen
             disabled={isLoading}
-            className="flex-1 bg-linear-to-b from-slate-900 to-slate-950 border border-slate-950 text-white placeholder-zinc-500 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-900 resize-none"
+            className="flex-1 bg-linear-to-b from-slate-900 to-slate-950 border border-slate-950 text-white placeholder-zinc-500 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-900 resize-none overflow-hidden"
           />
           <button
             onClick={() => (isLoading ? stopResponse() : handleSend())}

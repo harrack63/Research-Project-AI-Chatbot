@@ -14,7 +14,13 @@ export default function HomePage() {
   const [firstResponseReceived, setFirstResponseReceived] = useState(false);
   const [rightWidth, setRightWidth] = useState(400);
 
-  const toggleLeft = () => setShowLeft((p) => !p);
+  const toggleLeft = () => {
+    setShowLeft((p) => {
+      const newState = !p;
+      localStorage.setItem("sidebarLeftOpen", String(newState));
+      return newState;
+    });
+  };
   const toggleRight = () => {
     setShowRight((p) => {
       const newValue = !p;
@@ -89,6 +95,14 @@ export default function HomePage() {
     const interval = setInterval(checkImages, 500);
     return () => clearInterval(interval);
   }, [chatId, firstResponseReceived, showRight]);
+
+  useEffect(() => {
+    const savedState = localStorage.getItem("sidebarLeftOpen");
+    if (savedState !== null) {
+      setShowLeft(savedState === "true");
+    }
+  }, []);
+
   useEffect(() => {
     loadChats();
   }, []);

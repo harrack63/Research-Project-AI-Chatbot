@@ -71,7 +71,8 @@ def get_chatbot_instance(user_id: str):
             exp_name=user_id, 
             llm_model_name="OpenAI/gpt-5-mini", 
             user_id=user_id,
-            debug=True 
+            debug=True,
+            embedding_function=GLOBAL_EMBEDDINGS
         )
     return chatbot_instances[user_id]
 

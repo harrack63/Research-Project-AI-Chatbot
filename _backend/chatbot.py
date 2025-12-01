@@ -12,6 +12,7 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from typing import TypedDict, Literal, Optional
 import json
 import os
+import numpy as np
 from datetime import datetime
 import logging
 import functools
@@ -92,7 +93,7 @@ class PersonalizedChatbot:
 
     def __init__(
         self,
-        llm_model_name: str = "gpt-5",
+        llm_model_name: str = "gpt-5-mini",
         exp_name: str = "debug",
         debug: bool = False,
         user_id: str = "default_user",
@@ -147,8 +148,10 @@ class PersonalizedChatbot:
         
         # Caches embedding function => increased performance
         if embedding_function is None:
-             # Fallback if not passed
+             self.logger.info("No embedding function provided. Loading default.")
              embedding_function = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        
+        self.embedding_function = embedding_function
 
         load_history_start_time = datetime.now()
         self.fp_vectordb = f"{self.workdir}/{VECTORDB_NAME_CHAT_HISTORY}"
@@ -165,7 +168,19 @@ class PersonalizedChatbot:
         self.graph_agent = self._build_graph()
 
         self.fp_state = f"{self.workdir}/chatbot_state.json"
-
+        
+        # Define what Nodes like "Meal Planner" and "Chitchat" look like mathematically with anchors (Semantics can be optimized here)
+        # Scalable by just adding more key: value pairs to anchors_text
+        anchors_text = {
+            "meal_planner": "food recipes diet plan hungry cook dinner lunch breakfast nutrition ingredients groceries",
+            "chitchat": "hello hi how are you weather who are you random chat greeting general question what's up"
+        }
+        
+        # Pre-calculate embeddings once at startup
+        self.route_anchors = {}
+        for route, text in anchors_text.items():
+            self.route_anchors[route] = self.embedding_function.embed_query(text)
+            
         self.logger.info(
             f"Initialized {self.__class__.__name__} with exp_name: {exp_name}"
         )
@@ -429,56 +444,49 @@ class PersonalizedChatbot:
     #         )
 
     @log_execution_time
-    def _conductor_node(self, state: ChatbotState) -> Command[Literal["debug"]]:
+    def _conductor_node(self, state: ChatbotState) -> Command[Literal["debug", "meal_planner", "chitchat"]]: 
+                                                    # ^ Add more nodes here as nesseacary (may need to add in config for centralization)
         """
-        Agent responsible for generating chat responses.
-
-        Args:
-            state: Current chatbot state
-
-        Returns:
-            Command to transition back to update_persona node
+        SCALABLE ROUTER: Checks user input against ALL defined anchors.
         """
-        self.debug_counter += 1
-        self.logger.info(f"=== {self.debug_counter}: In conductor ===")
-
         user_msg = state["user_msg"]
 
-        # Catch all the debug commands from the user
+        # Debugging
         if user_msg.lower().strip().startswith("debug"):
-            self.logger.info("User issued a debug command. Switching to debug node.")
-            return Command(
-                goto="debug", update={"persona_update_status": "chat_completed"}
-            )
+            return Command(goto="debug", update={"persona_update_status": "chat_completed"})
 
-        messages = [
-            {
-                "role": "system",
-                "content": "You are an expert to decide which node to go to next. You are given a user message and a persona update status.",
-            },
-            {
-                "role": "user",
-                "content": f"If the user message is about a meal plan, go to the `meal_planner` node. Otherwise, go to the `chitchat` node. Answer in only the node name. User message: {user_msg}",
-            },
-        ]
-        response = self.llm_runner(messages)
-        self.logger.info(f"Conductor response: {response}")
+        # Embed the user's message
+        user_vec = self.embedding_function.embed_query(user_msg)
 
-        if response == "meal_planner":
-            self.logger.info(
-                "User message is about a meal plan. Switching to meal_planner node."
-            )
-            return Command(goto="meal_planner")
+        # Compare against ALL anchors
+        scores = {}
+        for route, anchor in self.route_anchors.items():
+            # Dot product for similarity
+            scores[route] = np.dot(user_vec, anchor)
+        
+        # Log scores
+        self.logger.info(f"Routing Scores: {scores}")
 
-        elif response == "chitchat":
-            self.logger.info(
-                "User message is about chitchat. Switching to chitchat node."
-            )
+        # Pick the winner
+        best_route = max(scores, key=scores.get)
+        best_score = scores[best_route]
+
+        # Threshold check (e.g., if everything is low, default to chitchat)
+        # 0.25 is a common baseline for "somewhat relevant" in cosine similarity
+        if best_score < 0.2: 
+            self.logger.info(f"Scores too low ({best_score:.3f}), defaulting to chitchat.")
             return Command(goto="chitchat")
 
-        else:
-            self.logger.error(f"Conductor response is not valid: {response}")
-            return Command(goto=END)
+        self.logger.info(f"Routing to {best_route} with score {best_score:.3f}")
+        
+        # NOTE: You must ensure these nodes (therapy, exercise) exist in your graph! 
+        # If they don't exist yet, you can map them to a fallback or handle them.
+        if best_route not in ["meal_planner", "chitchat"]: 
+            # Temporary fallback if you haven't built the 'therapy' node yet
+            self.logger.warning(f"Node '{best_route}' not implemented yet. Falling back to chitchat.")
+            return Command(goto="chitchat")
+            
+        return Command(goto=best_route)
 
     @log_execution_time
     def _debug_node(self, state: ChatbotState):
