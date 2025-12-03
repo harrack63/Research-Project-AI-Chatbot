@@ -189,7 +189,7 @@ export function useChat(userId: string, currentChatId?: string) {
 
     if (firstMessage && messages.length === 0) {
       // Clear the URL param
-      window.history.replaceState({}, "", `/chat/${currentChatId}`);
+      window.history.replaceState({}, "", `${process.env.NEXT_PUBLIC_CLERK_BASE_PATH || "healthChatbot"}/chat/${currentChatId}`);
       
       // Add user message
       const userMessage: Message = {
