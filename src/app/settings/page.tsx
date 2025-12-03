@@ -176,7 +176,7 @@ export default function SettingsPage() {
                     onChange={(e) =>
                       setPrefs({ ...prefs, chatName: e.target.value })
                     }
-                    placeholder="E.g. Manning"
+                    placeholder="E.g. John Smith"
                     className="w-full rounded-lg bg-slate-950 px-4 py-3 text-slate-100 placeholder-slate-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 border border-slate-800 outline-none transition-all"
                   />
                   <div className="absolute right-3 top-3.5 text-xs text-slate-600 font-mono">

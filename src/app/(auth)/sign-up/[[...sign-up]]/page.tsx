@@ -4,6 +4,7 @@ export default function SignUpPage() {
   return (
     <div className="w-full max-w-md">
       <SignUp
+        path={process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL}
         appearance={{
           elements: {
             rootBox: "w-full",

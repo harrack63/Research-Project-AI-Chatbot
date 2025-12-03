@@ -5,16 +5,20 @@ import { useAuthStatus } from "~/app/useAuth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+const base = process.env.NEXT_PUBLIC_CLERK_BASE_PATH;
+
 export default function HomePage() {
   const { isAuthenticated, isLoaded } = useAuthStatus();
   const router = useRouter();
 
   useEffect(() => {
     if (isLoaded) {
-      if (isAuthenticated) {
-        router.replace("/chat");
+      console.log("Auth: ", isAuthenticated);
+      console.log("IsLoaded", isLoaded)
+      if (!isAuthenticated) {
+        router.replace(`${base}/sign-in`);
       } else {
-        router.replace("/sign-in");
+        router.replace(`${base}/chat`);
       }
     }
   }, [isLoaded, isAuthenticated, router]);

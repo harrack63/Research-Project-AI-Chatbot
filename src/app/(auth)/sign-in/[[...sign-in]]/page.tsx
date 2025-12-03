@@ -4,6 +4,7 @@ export default function SignInPage() {
   return (
     <div className="w-full max-w-md">
       <SignIn
+        path={process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL}
         appearance={{
           elements: {
             rootBox: "w-full",

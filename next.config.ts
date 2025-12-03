@@ -3,7 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   reactCompiler: true,
-  basePath: "/healthchatbot/",
+  basePath: "/healthChatbot",
+  trailingSlash: true,
   redirects: async () => {
     return [
       {
