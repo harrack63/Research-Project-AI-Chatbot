@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useUser } from ;
+import { useAuth } from "~/lib/auth";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import type { ChatCategory } from "~/lib/types";
 import { getGlobalChats, setGlobalChats, loadChats, deleteChat } from "~/lib/chatStore";
@@ -50,7 +50,7 @@ function initializePinnedIds(chats: ChatCategory[]): Set<string> {
 export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { user } = useUser();
+  const { user } = useAuth();
   const activeChatId = searchParams.get("id") ?? "";
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<
@@ -225,13 +225,16 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   };
 
   const userInitials =
-    user && user.firstName && user.lastName
-      ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-      : user?.firstName
-        ? user.firstName[0].toUpperCase()
-        : "U";
+    user?.name
+      ? user.name
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2)
+      : "U";
 
-  const userName = user?.firstName || "User";
+  const userName = user?.name || "User";
 
   if (!isOpen) {
     return (

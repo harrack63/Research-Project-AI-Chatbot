@@ -6,12 +6,12 @@ import { useChat } from "~/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import TextareaAutosize from 'react-textarea-autosize';
-import { useUser } from ;
+import { useAuth } from "~/lib/auth";
 
 const SCROLL_THRESHOLD = 3000;
 
 export default function ChatArea({ chatId }: { chatId?: string }) {
-  const { user } = useUser();
+  const { user } = useAuth();
   const userId = user?.id || "";
 
   const { messages, isLoading, sendMessage, stopResponse } = useChat(userId, chatId);

@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useAuth } from ;
+import { useAuth } from "~/lib/auth";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, Suspense } from "react";
 import { Loader2 } from "lucide-react";
@@ -14,18 +14,16 @@ function HomeContent() {
   useEffect(() => {
     if (!isLoaded) return;
 
-    // Handle SPA routing from 404.html
     const route = searchParams.get("route");
     if (route) {
-      router.replace(`${route}`);
+      router.replace(route);
       return;
     }
 
-    // Normal auth redirect
     if (isSignedIn) {
-      router.replace(`/chat`);
+      router.replace("/chat");
     } else {
-      router.replace(`/sign-in`);
+      router.replace("/sign-in");
     }
   }, [isLoaded, isSignedIn, router, searchParams]);
 

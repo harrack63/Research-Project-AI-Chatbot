@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/auth";
 import { useCallback, useEffect, useState } from "react";
 import LogoutModal from "./components/logoutModel";
-import { Loader2 } from "lucide-react"; // Import spinner icon
-import { toast, Toaster } from "sonner"; // Import toast
+import { Loader2 } from "lucide-react";
+import { toast, Toaster } from "sonner";
 import { API_ROUTES } from "~/lib/api";
+import { ProtectedRoute } from "~/lib/ProtectedRoute";
 
 type Preferences = {
   user_id: string;
@@ -15,11 +16,13 @@ type Preferences = {
   personalInfo: string;
 };
 
-export default function SettingsPage() {
+function SettingsContent() {
   const router = useRouter();
   const { signOut, isLoaded, isSignedIn, user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<"customization" | "account">("customization");
+  const [activeTab, setActiveTab] = useState<"customization" | "account">(
+    "customization"
+  );
   const [prefs, setPrefs] = useState<Preferences>({
     user_id: "",
     chatName: "",
@@ -27,13 +30,15 @@ export default function SettingsPage() {
   });
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [isSaving, setIsSaving] = useState(false); // Add loading state
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Load preferences
   useEffect(() => {
     if (!isLoaded) return;
-    if (!isSignedIn) router.push("/sign-in");
-    
+    if (!isSignedIn) {
+      router.push("/sign-in");
+      return;
+    }
+
     if (user) {
       setPrefs((p) => ({ ...p, user_id: user.id }));
     }
@@ -54,16 +59,13 @@ export default function SettingsPage() {
     }
   }, [isLoaded, isSignedIn, router, user]);
 
-  const handleSignOut = useCallback(async () => {
+  const handleSignOut = useCallback(() => {
     setShowLogoutModal(false);
-    await signOut();
-    router.replace(`/sign-in`);
-  }, [signOut, router]);
+    signOut();
+  }, [signOut]);
 
   const handleSavePreferences = async () => {
-    setIsSaving(true); // Start loading
-
-    // Optimistic save to local storage
+    setIsSaving(true);
     localStorage.setItem("healthbot_preferences", JSON.stringify(prefs));
 
     try {
@@ -82,7 +84,7 @@ export default function SettingsPage() {
       console.error(err);
       toast.error("Failed to save preferences. Please try again.");
     } finally {
-      setIsSaving(false); // Stop loading
+      setIsSaving(false);
     }
   };
 
@@ -96,13 +98,11 @@ export default function SettingsPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-linear-to-b from-slate-950 to-slate-900 text-white font-sans">
-      {/* Toast Container */}
       <Toaster position="bottom-right" theme="dark" richColors />
 
-      {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 backdrop-blur-md bg-slate-900/40 border-b border-slate-800">
         <button
-          onClick={() => router.push(`/chat`)}
+          onClick={() => router.push("/chat")}
           className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors duration-200 group"
         >
           <svg
@@ -125,10 +125,9 @@ export default function SettingsPage() {
           Settings
         </h1>
 
-        <div className="w-16" /> {/* Spacer for alignment */}
+        <div className="w-16" />
       </header>
 
-      {/* Tabs */}
       <nav className="flex justify-center mt-8 space-x-12 border-b border-slate-800/60">
         {["customization", "account"].map((tab) => (
           <button
@@ -148,7 +147,6 @@ export default function SettingsPage() {
         ))}
       </nav>
 
-      {/* Content */}
       <main className="flex flex-1 justify-center px-4 py-12">
         <section className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden p-8">
           {activeTab === "customization" && (
@@ -162,7 +160,6 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              {/* Chat Name */}
               <div className="space-y-3 mb-8">
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
                   What should Healthbot call you?
@@ -184,7 +181,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Personal Info */}
               <div className="space-y-3 mb-8">
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide">
                   Context & Preferences
@@ -206,7 +202,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              {/* Save Button */}
               <div className="flex justify-end pt-4 border-t border-slate-800/50">
                 <button
                   onClick={handleSavePreferences}
@@ -245,9 +240,9 @@ export default function SettingsPage() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Account</h2>
               <p className="text-sm text-slate-400 mb-8 max-w-xs mx-auto">
-                Signed in as {user?.emailAddresses[0]?.emailAddress}
+                Signed in as {user?.email || "Unknown"}
               </p>
-              
+
               <button
                 onClick={() => setShowLogoutModal(true)}
                 className="w-full sm:w-auto px-8 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 hover:border-red-500/40 font-semibold rounded-lg transition-all duration-200"
@@ -259,12 +254,19 @@ export default function SettingsPage() {
         </section>
       </main>
 
-      {/* Logout Modal */}
       <LogoutModal
         isOpen={showLogoutModal}
         onConfirm={handleSignOut}
         onCancel={() => setShowLogoutModal(false)}
       />
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <ProtectedRoute>
+      <SettingsContent />
+    </ProtectedRoute>
   );
 }
