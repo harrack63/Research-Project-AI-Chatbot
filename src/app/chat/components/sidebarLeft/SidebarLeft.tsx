@@ -10,7 +10,7 @@ import CollapsedSidebar from "./collapsedSidebar";
 import SearchModal from "./searchModel";
 import CategorySection from "./categorySection";
 import DeleteModal from "./deleteModel";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -48,10 +48,10 @@ function initializePinnedIds(chats: ChatCategory[]): Set<string> {
 }
 
 export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
-  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const { user } = useUser();
-  const activeChatId = params?.id as string | null;
+  const activeChatId = searchParams.get("id") ?? "";
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, boolean>
@@ -256,7 +256,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         <div className="p-3 border-b border-slate-800 flex items-center justify-between gap-2 mt-1 ml-1">
           <div className="flex-1 flex items-center gap-2 justify-center">
             <Image
-              src="/favicon.png"
+              src="/favicon.ico"
               alt="Healthbot"
               width={24}
               height={24}

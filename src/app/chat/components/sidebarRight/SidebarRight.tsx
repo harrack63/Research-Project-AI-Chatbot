@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { getGlobalChats } from "~/lib/chatStore";
 import type { ChatImage } from "~/lib/types";
 import { ChevronRight, ChevronLeft } from "lucide-react";
@@ -31,8 +31,8 @@ export default function SidebarRight({
 }: SidebarRightProps) {
   const [selectedImage, setSelectedImage] = useState<ChatImage | null>(null);
   const [isResizing, setIsResizing] = useState(false);
-  const params = useParams();
-  const chatId = params?.id as string | undefined;
+  const searchParams = useSearchParams();
+  const chatId = searchParams.get("id") ?? "";
 
   // Initialize images with lazy initializer
   const [images, setImages] = useState<ChatImage[]>(() =>

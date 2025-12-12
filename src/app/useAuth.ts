@@ -1,3 +1,6 @@
+// src/app/useAuth.ts
+"use client";
+
 import { useAuth, useUser } from "@clerk/nextjs";
 
 export function useAuthStatus() {
@@ -5,12 +8,13 @@ export function useAuthStatus() {
   const { user } = useUser();
 
   return {
-    isAuthenticated: isSignedIn,
+    isAuthenticated: isSignedIn ?? false,
     isLoaded,
+    userId: user?.id ?? null,
     user: user
       ? {
           id: user.id,
-          email: user.emailAddresses[0]?.emailAddress,
+          email: user.emailAddresses[0]?.emailAddress ?? "",
           username: user.username || user.firstName || "User",
           name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
         }

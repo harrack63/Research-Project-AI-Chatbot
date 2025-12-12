@@ -8,6 +8,7 @@ import LogoutModal from "./components/logoutModel";
 import { Loader2 } from "lucide-react"; // Import spinner icon
 import { toast, Toaster } from "sonner"; // Import toast
 import { API_ROUTES } from "~/lib/api";
+import { basePath } from "~/lib/global_vars";
 
 type Preferences = {
   user_id: string;
@@ -58,7 +59,7 @@ export default function SettingsPage() {
   const handleSignOut = useCallback(async () => {
     setShowLogoutModal(false);
     await signOut();
-    router.replace("/sign-in");
+    router.replace(`/sign-in`);
   }, [signOut, router]);
 
   const handleSavePreferences = async () => {
@@ -103,7 +104,7 @@ export default function SettingsPage() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 backdrop-blur-md bg-slate-900/40 border-b border-slate-800">
         <button
-          onClick={() => router.push("/chat")}
+          onClick={() => router.push(`/chat`)}
           className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors duration-200 group"
         >
           <svg

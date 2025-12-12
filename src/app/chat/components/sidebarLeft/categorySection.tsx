@@ -1,6 +1,7 @@
 import ChatItem from "./chatItem";
 import type { Chat } from "~/lib/types";
 import { useRouter } from 'next/navigation';
+import { basePath } from "~/lib/global_vars";
 
 type CategorySectionProps = {
   label: string;
@@ -92,7 +93,7 @@ export default function CategorySection({
               onPin={onPin}
               onDelete={onDelete}
               category={label}
-              onClick={() => router.push(`/chat/${chat.id}`)}
+              onClick={() => router.push(`/chat?id=${chat.id}`)}
             />
           ))}
         </div>

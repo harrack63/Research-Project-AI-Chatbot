@@ -1,9 +1,9 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import SidebarLeft from "~/app/chat/components/sidebarLeft/SidebarLeft";
 import SidebarRight from "~/app/chat/components/sidebarRight/SidebarRight";
 import ChatArea from "~/app/chat/components/chat/ChatArea";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { getGlobalChats, loadChats } from "~/lib/chatStore";
 
@@ -39,9 +39,9 @@ export default function HomePage() {
     });
   };
 
-  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const chatId = (params?.id as string) || "";
+  const chatId = searchParams.get("id") ?? "";
 
   const handleRightWidthChange = useCallback(
     (newWidth: number) => {
@@ -107,32 +107,33 @@ export default function HomePage() {
     loadChats();
   }, []);
 
-  
+
   return (
-    <div className="flex min-h-screen bg-blue-950">
-      {/* Left sidebar - proper width transition */}
-      <div
-        className={`transition-all duration-300 ${
-          showLeft ? "w-64" : "w-0"
-        } overflow-hidden`}
-      >
-        <SidebarLeft isOpen={showLeft} onToggle={toggleLeft} />
+    <Suspense fallback={null}>
+      <div className="flex min-h-screen bg-blue-950">
+        {/* Left sidebar - proper width transition */}
+        <div
+          className={`transition-all duration-300 ${showLeft ? "w-64" : "w-0"
+            } overflow-hidden`}
+        >
+          <SidebarLeft isOpen={showLeft} onToggle={toggleLeft} />
+        </div>
+
+        {/* Main content */}
+        <main className="flex-1 flex flex-col relative min-w-0">
+          <ChatArea key={chatId} chatId={chatId} />
+        </main>
+
+        {/* Right sidebar */}
+        {hasImages && (
+          <SidebarRight
+            isOpen={showRight}
+            onToggle={toggleRight}
+            width={rightWidth}
+            onWidthChange={handleRightWidthChange}
+          />
+        )}
       </div>
-
-      {/* Main content */}
-      <main className="flex-1 flex flex-col relative min-w-0">
-        <ChatArea key={chatId} />
-      </main>
-
-      {/* Right sidebar */}
-      {hasImages && (
-        <SidebarRight
-          isOpen={showRight}
-          onToggle={toggleRight}
-          width={rightWidth}
-          onWidthChange={handleRightWidthChange}
-        />
-      )}
-    </div>
+    </Suspense>
   );
 }

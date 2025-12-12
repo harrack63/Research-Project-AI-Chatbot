@@ -2,6 +2,8 @@
 
 Install conda, python=3.11
 Install nvm, version 24.9.0
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+
 
 Backend lives on https://0.0.0.0:8000
 Frontend lives on https://localhost:3000

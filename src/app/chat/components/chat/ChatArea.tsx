@@ -5,19 +5,12 @@ import { useRef, useEffect, useState } from "react";
 import { useChat } from "~/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
-import { useParams } from "next/navigation";
 import TextareaAutosize from 'react-textarea-autosize';
 import { useUser } from "@clerk/nextjs";
 
 const SCROLL_THRESHOLD = 3000;
 
-type ChatAreaProps = {
-  onFirstResponse?: () => void;
-};
-
-export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
-  const params = useParams();
-  const chatId = params?.id as string | undefined;
+export default function ChatArea({ chatId }: { chatId?: string }) {
   const { user } = useUser();
   const userId = user?.id || "";
 
@@ -48,12 +41,6 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
-
-  useEffect(() => {
-    if (messages.some((m) => m.role === "assistant") && onFirstResponse) {
-      onFirstResponse();
-    }
-  }, [messages, onFirstResponse]);
 
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;

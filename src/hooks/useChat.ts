@@ -1,7 +1,7 @@
-// hooks/useChat.ts
+// src/hooks/useChat.ts
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { ChatImage, Message } from "~/lib/types";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { generateUniqueChatId } from "~/lib/chatUtils";
 import { createNewChat } from "~/lib/chatStore";
 import { sendChatMessageStream } from "~/utils/utils";
@@ -14,6 +14,7 @@ export function useChat(userId: string, currentChatId?: string) {
   const [images, setImages] = useState<ChatImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -67,7 +68,7 @@ export function useChat(userId: string, currentChatId?: string) {
     async (userInput: string) => {
       if (!userId) {
         console.error("Attempted to send message without User ID.");
-        return; 
+        return;
       }
 
       setIsLoading(true);
@@ -133,7 +134,7 @@ export function useChat(userId: string, currentChatId?: string) {
         abortControllerRef.current = null;
       }
     },
-    [addMessage, currentChatId, messages, updateLastMessage]
+    [addMessage, currentChatId, messages, updateLastMessage, userId]
   );
 
   const sendMessage = useCallback(
@@ -142,27 +143,24 @@ export function useChat(userId: string, currentChatId?: string) {
 
       if (!userId) {
         console.error("Attempted to send message without User ID.");
-        return; 
+        return;
       }
 
       if (!currentChatId) {
-        // Create new chat
-        const userId = "user-temp";
+        // Create new chat with query param routing
         const newChatId = generateUniqueChatId(userId);
         const title = userInput.substring(0, 50).split("\n")[0] || "New Chat";
         createNewChat(newChatId, title);
 
-        // Force sidebar update
         window.dispatchEvent(new CustomEvent("chats-updated"));
 
-        // Navigate with state
+        // Use query params instead of path
         router.push(
-          `/chat/${newChatId}?firstMessage=${encodeURIComponent(userInput)}`
+          `/chat?id=${newChatId}&firstMessage=${encodeURIComponent(userInput)}`
         );
         return;
       }
 
-      // Add user message
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: "user",
@@ -171,27 +169,29 @@ export function useChat(userId: string, currentChatId?: string) {
       };
       addMessage(userMessage);
 
-      // Process bot response
       await processMessage(userInput);
     },
-    [currentChatId, router, processMessage, addMessage]
+    [currentChatId, router, processMessage, addMessage, userId]
   );
 
   const stopResponse = () => {
     abortControllerRef.current?.abort();
   };
 
+  // Handle first message from URL
   useEffect(() => {
     if (!currentChatId) return;
 
-    const params = new URLSearchParams(window.location.search);
-    const firstMessage = params.get("firstMessage");
+    const firstMessage = searchParams.get("firstMessage");
 
     if (firstMessage && messages.length === 0) {
       // Clear the URL param
-      window.history.replaceState({}, "", `${process.env.NEXT_PUBLIC_CLERK_BASE_PATH || "healthChatbot"}/chat/${currentChatId}`);
-      
-      // Add user message
+      window.history.replaceState(
+        {},
+        "",
+        `/chat?id=${currentChatId}`
+      );
+
       const userMessage: Message = {
         id: `user-${Date.now()}`,
         role: "user",
@@ -200,10 +200,9 @@ export function useChat(userId: string, currentChatId?: string) {
       };
       setMessages([userMessage]);
 
-      // Process bot response
-      processMessage(firstMessage); // Send raw message, backend handles context
+      processMessage(firstMessage);
     }
-  }, [currentChatId, messages.length, processMessage]);
+  }, [currentChatId, messages.length, processMessage, searchParams]);
 
   return { messages, images, isLoading, sendMessage, stopResponse };
 }

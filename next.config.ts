@@ -1,27 +1,14 @@
+// next.config.ts
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  reactCompiler: true,
+  output: "export",
   basePath: "/healthChatbot",
   trailingSlash: true,
-  redirects: async () => {
-    return [
-      {
-        source: "/",
-        destination: "/chat",
-        permanent: false,
-      },
-    ];
-  },
   images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "picsum.photos",
-      },
-    ],
+    unoptimized: true, // Required for static export
   },
+  // No redirects in static export - handle client-side
 };
 
 export default nextConfig;
