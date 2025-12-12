@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuthStatus } from "~/app/useAuth";
-import { UserButton } from "@clerk/nextjs";
+import { UserButton } from ;
 import Link from "next/link";
 
 export default function Navbar() {

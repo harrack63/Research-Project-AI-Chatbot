@@ -1,7 +1,7 @@
 // src/app/useAuth.ts
 "use client";
 
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from ;
 
 export function useAuthStatus() {
   const { isSignedIn, isLoaded } = useAuth();

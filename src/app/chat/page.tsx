@@ -10,7 +10,7 @@ import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { getGlobalChats, loadChats } from "~/lib/chatStore";
 
 import { Loader2 } from "lucide-react";
-import { ProtectedRoute } from "~/lib/protectedRoute";
+import { ProtectedRoute } from "~/lib/ProtectedRoute";
 
 function ChatContent() {
   const [showLeft, setShowLeft] = useState(true);

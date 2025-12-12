@@ -1,7 +1,7 @@
 // src/app/page.tsx
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from ;
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, Suspense } from "react";
 import { Loader2 } from "lucide-react";

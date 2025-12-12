@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { generateUniqueChatId } from "~/lib/chatUtils";
 import { createNewChat } from "~/lib/chatStore";
 import { sendChatMessageStream } from "~/utils/utils";
+import { useAuth } from "~/lib/auth";
 
 const MESSAGES_STORAGE_KEY = "healthbot_messages_";
 

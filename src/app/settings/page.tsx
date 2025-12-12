@@ -2,13 +2,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useAuth, useUser } from "@clerk/nextjs";
+import { useAuth } from "~/lib/auth";
 import { useCallback, useEffect, useState } from "react";
 import LogoutModal from "./components/logoutModel";
 import { Loader2 } from "lucide-react"; // Import spinner icon
 import { toast, Toaster } from "sonner"; // Import toast
 import { API_ROUTES } from "~/lib/api";
-import { basePath } from "~/lib/global_vars";
 
 type Preferences = {
   user_id: string;
@@ -18,8 +17,7 @@ type Preferences = {
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { signOut, isLoaded, isSignedIn } = useAuth();
-  const { user } = useUser();
+  const { signOut, isLoaded, isSignedIn, user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<"customization" | "account">("customization");
   const [prefs, setPrefs] = useState<Preferences>({

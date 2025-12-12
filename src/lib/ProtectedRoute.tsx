@@ -1,7 +1,7 @@
-// src/lib/ProtectedRoute.tsx
+// src/lib/protectedRoute.tsx
 "use client";
 
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "~/lib/auth";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
@@ -12,9 +12,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      const currentPath = window.location.pathname + window.location.search;
-      const redirectUrl = `/sign-in?redirect_url=${encodeURIComponent(currentPath)}`;
-      router.replace(redirectUrl);
+      router.replace("/sign-in");
     }
   }, [isLoaded, isSignedIn, router]);
 
@@ -26,9 +24,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isSignedIn) {
-    return null;
-  }
+  if (!isSignedIn) return null;
 
   return <>{children}</>;
 }

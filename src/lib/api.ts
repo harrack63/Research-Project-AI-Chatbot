@@ -4,4 +4,6 @@ export const API_BASE =
 export const API_ROUTES = {
   chatStream: `${API_BASE}/api/chat/stream`,
   userPreferences: `${API_BASE}/api/user/preferences`,
+  login: `${API_BASE}/api/auth/login`,
+  register: `${API_BASE}/api/auth/register`,
 };

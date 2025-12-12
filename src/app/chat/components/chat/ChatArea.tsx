@@ -6,7 +6,7 @@ import { useChat } from "~/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import TextareaAutosize from 'react-textarea-autosize';
-import { useUser } from "@clerk/nextjs";
+import { useUser } from ;
 
 const SCROLL_THRESHOLD = 3000;
 
