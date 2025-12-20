@@ -13,7 +13,14 @@ import { Loader2 } from "lucide-react";
 import AuthGate from "~/app/components/AuthGate";
 
 function ChatContent() {
-  const [showLeft, setShowLeft] = useState(true);
+  const [showLeft, setShowLeft] = useState(() => {
+    try {
+      const savedState = localStorage.getItem("sidebarLeftOpen");
+      return savedState !== null ? savedState === "true" : true;
+    } catch {
+      return true;
+    }
+  });
   const [showRight, setShowRight] = useState(false);
   const [hasImages, setHasImages] = useState(false);
   const [firstResponseReceived, setFirstResponseReceived] = useState(false);
@@ -96,14 +103,6 @@ function ChatContent() {
     const interval = setInterval(checkImages, 500);
     return () => clearInterval(interval);
   }, [chatId, firstResponseReceived, showRight]);
-
-  // Load sidebar state
-  useEffect(() => {
-    const savedState = localStorage.getItem("sidebarLeftOpen");
-    if (savedState !== null) {
-      setShowLeft(savedState === "true");
-    }
-  }, []);
 
   // Load chats
   useEffect(() => {

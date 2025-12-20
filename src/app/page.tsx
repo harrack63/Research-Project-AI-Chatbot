@@ -28,7 +28,7 @@ function HomeContent() {
   }, [isLoaded, isSignedIn, router, searchParams]);
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-900 to-blue-950">
+    <div className="flex items-center justify-center min-h-screen bg-linear-to-br from-blue-900 to-blue-950">
       <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
     </div>
   );
@@ -38,7 +38,7 @@ export default function HomePage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-900 to-blue-950">
+        <div className="flex items-center justify-center min-h-screen bg-linear-to-br from-blue-900 to-blue-950">
           <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
         </div>
       }
