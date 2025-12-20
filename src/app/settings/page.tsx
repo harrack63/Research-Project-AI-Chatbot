@@ -3,12 +3,13 @@
 
 import { useRouter } from "next/navigation";
 import { useAuth } from "~/lib/auth";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import LogoutModal from "./components/logoutModel";
 import { Loader2 } from "lucide-react";
+import { getAuthToken } from "~/lib/auth";
 import { toast, Toaster } from "sonner";
 import { API_ROUTES } from "~/lib/api";
-import { ProtectedRoute } from "~/lib/ProtectedRoute";
+import AuthGate from "~/app/components/AuthGate";
 
 type Preferences = {
   user_id: string;
@@ -32,33 +33,6 @@ function SettingsContent() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    if (!isLoaded) return;
-    if (!isSignedIn) {
-      router.push("/sign-in");
-      return;
-    }
-
-    if (user) {
-      setPrefs((p) => ({ ...p, user_id: user.id }));
-    }
-
-    try {
-      const stored = localStorage.getItem("healthbot_preferences");
-      if (stored) {
-        const parsed: Preferences = JSON.parse(stored);
-        setPrefs((p) => ({
-          ...p,
-          user_id: user?.id || p.user_id,
-          chatName: parsed.chatName || "",
-          personalInfo: parsed.personalInfo || "",
-        }));
-      }
-    } catch (err) {
-      console.error("Failed to load preferences:", err);
-    }
-  }, [isLoaded, isSignedIn, router, user]);
-
   const handleSignOut = useCallback(() => {
     setShowLogoutModal(false);
     signOut();
@@ -72,6 +46,14 @@ function SettingsContent() {
       const res = await fetch(API_ROUTES.userPreferences, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        ...(getAuthToken()
+          ? {
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${getAuthToken()}`,
+              },
+            }
+          : {}),
         body: JSON.stringify(prefs),
       });
 
@@ -265,8 +247,8 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <ProtectedRoute>
+    <AuthGate>
       <SettingsContent />
-    </ProtectedRoute>
+    </AuthGate>
   );
 }

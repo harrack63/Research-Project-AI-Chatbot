@@ -13,6 +13,7 @@ import DeleteModal from "./deleteModel";
 import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { basePath } from "~/lib/global_vars";
 
 type SidebarLeftProps = {
   isOpen: boolean;
@@ -259,7 +260,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         <div className="p-3 border-b border-slate-800 flex items-center justify-between gap-2 mt-1 ml-1">
           <div className="flex-1 flex items-center gap-2 justify-center">
             <Image
-              src="/favicon.ico"
+              src={`${basePath}/favicon.ico`}
               alt="Healthbot"
               width={24}
               height={24}

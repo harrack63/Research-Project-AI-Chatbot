@@ -1,6 +1,7 @@
 // utils/utils.ts
 import type { ChatImage, Message } from "~/lib/types";
 import { API_BASE, API_ROUTES } from "~/lib/api";
+import { getAuthToken } from "~/lib/auth";
 
 export async function sendChatMessageStream(
   messages: Message[],
@@ -9,12 +10,15 @@ export async function sendChatMessageStream(
   onImages?: (images: ChatImage[]) => void,
   signal?: AbortSignal
 ): Promise<void> {
+  const token = getAuthToken();
+  
   const response = await fetch(API_ROUTES.chatStream, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
       "Cache-Control": "no-cache",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ messages, userId }),
     signal,

@@ -1,80 +1,110 @@
 // src/lib/auth.tsx
-"use client";
-
-import {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  useCallback,
-  type ReactNode,
-} from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useSyncExternalStore } from "react";
 import { API_BASE } from "~/lib/api";
 
 type User = {
   id: string;
   email: string;
-  name: string;
+  name?: string;
+  username?: string;
 };
-
-type AuthContextType = {
-  user: User | null;
-  isLoaded: boolean;
-  isSignedIn: boolean;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
-  signUp: (
-    email: string,
-    password: string,
-    name: string
-  ) => Promise<{ error?: string }>;
-  signOut: () => void;
-};
-
-const AuthContext = createContext<AuthContextType | null>(null);
 
 const TOKEN_KEY = "healthbot_token";
 const USER_KEY = "healthbot_user";
+const AUTH_EVENT = "healthbot-auth-changed";
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const router = useRouter();
+function safeParse<T>(raw: string | null): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
 
-  // Load user from localStorage on mount
-  useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem(USER_KEY);
-      const storedToken = localStorage.getItem(TOKEN_KEY);
-      if (storedUser && storedToken) {
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (e) {
-      console.error("Failed to load auth state:", e);
-    }
-    setIsLoaded(true);
-  }, []);
+function readAuthSnapshot(): { user: User | null; token: string | null } {
+  if (typeof window === "undefined") return { user: null, token: null };
+  const token = window.localStorage.getItem(TOKEN_KEY);
+  const user = safeParse<User>(window.localStorage.getItem(USER_KEY));
+  if (!token || !user) return { user: null, token: null };
+  return { user, token };
+}
+
+function writeAuth(user: User, token: string) {
+  window.localStorage.setItem(TOKEN_KEY, token);
+  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+  window.dispatchEvent(new Event(AUTH_EVENT));
+}
+
+function clearAuth() {
+  window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(USER_KEY);
+  window.dispatchEvent(new Event(AUTH_EVENT));
+}
+
+function subscribe(cb: () => void) {
+  if (typeof window === "undefined") return () => {};
+  const onAuth = () => cb();
+  window.addEventListener(AUTH_EVENT, onAuth);
+  window.addEventListener("storage", onAuth);
+  return () => {
+    window.removeEventListener(AUTH_EVENT, onAuth);
+    window.removeEventListener("storage", onAuth);
+  };
+}
+
+type SignInResult = { error?: string };
+
+export function useAuth() {
+  const snapshot = useSyncExternalStore(
+    subscribe,
+    readAuthSnapshot,
+    () => ({ user: null, token: null })
+  );
 
   const signIn = useCallback(
-    async (email: string, password: string): Promise<{ error?: string }> => {
+    async (email: string, password: string): Promise<SignInResult> => {
       try {
-        const res = await fetch(`${API_BASE}/api/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        });
+        // Support BOTH backends:
+        // - your current: POST /api/auth/login -> { token, user }
+        // - JWT router:   POST /auth/login     -> { access_token, user, token_type }
+        const tryUrls = [`${API_BASE}/api/auth/login`, `${API_BASE}/auth/login`];
 
-        if (!res.ok) {
+        let lastErr = "Login failed";
+        for (const url of tryUrls) {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            lastErr =
+              data?.message ||
+              data?.detail ||
+              (typeof data === "string" ? data : "Invalid credentials");
+            continue;
+          }
+
           const data = await res.json();
-          return { error: data.message || "Invalid credentials" };
+          const token: string | undefined = data.token ?? data.access_token;
+          const user: User | undefined = data.user;
+
+          if (!token || !user) return { error: "Malformed auth response" };
+
+          // Normalize "name" for UI
+          const normalizedUser: User = {
+            ...user,
+            name: user.name ?? user.username ?? user.email,
+          };
+
+          writeAuth(normalizedUser, token);
+          return {};
         }
 
-        const data = await res.json();
-        localStorage.setItem(TOKEN_KEY, data.token);
-        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-        setUser(data.user);
-        return {};
-      } catch (e) {
+        return { error: lastErr };
+      } catch {
         return { error: "Network error. Please try again." };
       }
     },
@@ -82,29 +112,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (
-      email: string,
-      password: string,
-      name: string
-    ): Promise<{ error?: string }> => {
+    async (email: string, password: string, name: string) => {
       try {
-        const res = await fetch(`${API_BASE}/api/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, name }),
-        });
+        // Support BOTH backends:
+        // - your current: POST /api/auth/register -> { token, user } (expects name)
+        // - JWT router:   POST /auth/register     -> { access_token, user } (expects username)
+        const attempts: Array<{ url: string; body: unknown }> = [
+          {
+            url: `${API_BASE}/api/auth/register`,
+            body: { email, password, name },
+          },
+          {
+            url: `${API_BASE}/auth/register`,
+            body: { email, password, username: name },
+          },
+        ];
 
-        if (!res.ok) {
+        let lastErr = "Registration failed";
+        for (const a of attempts) {
+          const res = await fetch(a.url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(a.body),
+          });
+
+          if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            lastErr =
+              data?.message ||
+              data?.detail ||
+              (typeof data === "string" ? data : "Registration failed");
+            continue;
+          }
+
           const data = await res.json();
-          return { error: data.message || "Registration failed" };
+          const token: string | undefined = data.token ?? data.access_token;
+          const user: User | undefined = data.user;
+          if (!token || !user) return { error: "Malformed auth response" };
+
+          const normalizedUser: User = {
+            ...user,
+            name: user.name ?? user.username ?? user.email,
+          };
+          writeAuth(normalizedUser, token);
+          return {};
         }
 
-        const data = await res.json();
-        localStorage.setItem(TOKEN_KEY, data.token);
-        localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-        setUser(data.user);
-        return {};
-      } catch (e) {
+        return { error: lastErr };
+      } catch {
         return { error: "Network error. Please try again." };
       }
     },
@@ -112,35 +167,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(() => {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    setUser(null);
-    router.push("/sign-in");
-  }, [router]);
+    if (typeof window === "undefined") return;
+    clearAuth();
+  }, []);
 
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoaded,
-        isSignedIn: !!user,
-        signIn,
-        signUp,
-        signOut,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
+  return {
+    user: snapshot.user,
+    isLoaded: true,
+    isSignedIn: !!snapshot.user,
+    signIn,
+    signUp,
+    signOut,
+  };
 }
 
 export function getAuthToken(): string | null {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(TOKEN_KEY);
+  return window.localStorage.getItem(TOKEN_KEY);
 }

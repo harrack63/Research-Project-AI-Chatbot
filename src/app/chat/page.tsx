@@ -10,7 +10,7 @@ import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { getGlobalChats, loadChats } from "~/lib/chatStore";
 
 import { Loader2 } from "lucide-react";
-import { ProtectedRoute } from "~/lib/ProtectedRoute";
+import AuthGate from "~/app/components/AuthGate";
 
 function ChatContent() {
   const [showLeft, setShowLeft] = useState(true);
@@ -113,9 +113,8 @@ function ChatContent() {
   return (
     <div className="flex min-h-screen bg-blue-950">
       <div
-        className={`transition-all duration-300 ${
-          showLeft ? "w-64" : "w-0"
-        } overflow-hidden`}
+        className={`transition-all duration-300 ${showLeft ? "w-64" : "w-0"
+          } overflow-hidden`}
       >
         <SidebarLeft isOpen={showLeft} onToggle={toggleLeft} />
       </div>
@@ -138,7 +137,7 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <ProtectedRoute>
+    <AuthGate>
       <Suspense
         fallback={
           <div className="flex items-center justify-center min-h-screen bg-blue-950">
@@ -148,6 +147,6 @@ export default function ChatPage() {
       >
         <ChatContent />
       </Suspense>
-    </ProtectedRoute>
+    </AuthGate>
   );
 }
