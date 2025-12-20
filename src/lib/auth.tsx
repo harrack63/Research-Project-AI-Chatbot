@@ -13,6 +13,14 @@ const TOKEN_KEY = "healthbot_token";
 const USER_KEY = "healthbot_user";
 const AUTH_EVENT = "healthbot-auth-changed";
 
+type AuthSnapshot = { user: User | null; token: string | null };
+
+// IMPORTANT: keep these references stable to avoid infinite loops
+const EMPTY_SNAPSHOT: AuthSnapshot = { user: null, token: null };
+
+let cachedKey = "";
+let cachedSnapshot: AuthSnapshot = EMPTY_SNAPSHOT;
+
 function safeParse<T>(raw: string | null): T | null {
   if (!raw) return null;
   try {
@@ -22,12 +30,33 @@ function safeParse<T>(raw: string | null): T | null {
   }
 }
 
-function readAuthSnapshot(): { user: User | null; token: string | null } {
-  if (typeof window === "undefined") return { user: null, token: null };
+function readAuthSnapshot(): AuthSnapshot {
+  // GitHub Pages: client-only. Still provide a stable server snapshot.
+  if (typeof window === "undefined") return EMPTY_SNAPSHOT;
+
   const token = window.localStorage.getItem(TOKEN_KEY);
-  const user = safeParse<User>(window.localStorage.getItem(USER_KEY));
-  if (!token || !user) return { user: null, token: null };
-  return { user, token };
+  const userRaw = window.localStorage.getItem(USER_KEY);
+
+  // Key must be purely derived from storage so it only changes when storage does.
+  const nextKey = `${token ?? ""}::${userRaw ?? ""}`;
+  if (nextKey === cachedKey) return cachedSnapshot;
+
+  if (!token || !userRaw) {
+    cachedKey = nextKey;
+    cachedSnapshot = EMPTY_SNAPSHOT;
+    return cachedSnapshot;
+  }
+
+  const user = safeParse<User>(userRaw);
+  if (!user) {
+    cachedKey = nextKey;
+    cachedSnapshot = EMPTY_SNAPSHOT;
+    return cachedSnapshot;
+  }
+
+  cachedKey = nextKey;
+  cachedSnapshot = { user, token };
+  return cachedSnapshot;
 }
 
 function writeAuth(user: User, token: string) {
@@ -59,32 +88,24 @@ export function useAuth() {
   const snapshot = useSyncExternalStore(
     subscribe,
     readAuthSnapshot,
-    () => ({ user: null, token: null })
+    () => EMPTY_SNAPSHOT
   );
 
   const signIn = useCallback(
     async (email: string, password: string): Promise<SignInResult> => {
       try {
-        // Support BOTH backends:
-        // - your current: POST /api/auth/login -> { token, user }
-        // - JWT router:   POST /auth/login     -> { access_token, user, token_type }
-        const tryUrls = [`${API_BASE}/api/auth/login`, `${API_BASE}/auth/login`];
-
-        let lastErr = "Login failed";
-        for (const url of tryUrls) {
-          const res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, password }),
-          });
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
 
           if (!res.ok) {
             const data = await res.json().catch(() => null);
-            lastErr =
-              data?.message ||
-              data?.detail ||
-              (typeof data === "string" ? data : "Invalid credentials");
-            continue;
+            const errorMessage = data?.detail || data?.message || "Invalid credentials";
+            return { error:
+              typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage
+            };
           }
 
           const data = await res.json();
@@ -101,9 +122,6 @@ export function useAuth() {
 
           writeAuth(normalizedUser, token);
           return {};
-        }
-
-        return { error: lastErr };
       } catch {
         return { error: "Network error. Please try again." };
       }
@@ -114,35 +132,18 @@ export function useAuth() {
   const signUp = useCallback(
     async (email: string, password: string, name: string) => {
       try {
-        // Support BOTH backends:
-        // - your current: POST /api/auth/register -> { token, user } (expects name)
-        // - JWT router:   POST /auth/register     -> { access_token, user } (expects username)
-        const attempts: Array<{ url: string; body: unknown }> = [
-          {
-            url: `${API_BASE}/api/auth/register`,
-            body: { email, password, name },
-          },
-          {
-            url: `${API_BASE}/auth/register`,
-            body: { email, password, username: name },
-          },
-        ];
-
-        let lastErr = "Registration failed";
-        for (const a of attempts) {
-          const res = await fetch(a.url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(a.body),
-          });
+        const res = await fetch(`${API_BASE}/api/auth/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, name }),
+        });
 
           if (!res.ok) {
             const data = await res.json().catch(() => null);
-            lastErr =
-              data?.message ||
-              data?.detail ||
-              (typeof data === "string" ? data : "Registration failed");
-            continue;
+            const errorMessage = data?.detail || data?.message || "Invalid credentials";
+            return { error:
+              typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage
+            };
           }
 
           const data = await res.json();
@@ -156,9 +157,6 @@ export function useAuth() {
           };
           writeAuth(normalizedUser, token);
           return {};
-        }
-
-        return { error: lastErr };
       } catch {
         return { error: "Network error. Please try again." };
       }

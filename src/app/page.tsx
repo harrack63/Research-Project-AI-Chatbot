@@ -10,11 +10,11 @@ function HomeContent() {
   const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const route = searchParams.get("route");
 
   useEffect(() => {
     if (!isLoaded) return;
 
-    const route = searchParams.get("route");
     if (route) {
       router.replace(route);
       return;
@@ -25,7 +25,7 @@ function HomeContent() {
     } else {
       router.replace("/sign-in");
     }
-  }, [isLoaded, isSignedIn, router, searchParams]);
+  }, [isLoaded, isSignedIn, router, route]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-linear-to-br from-blue-900 to-blue-950">

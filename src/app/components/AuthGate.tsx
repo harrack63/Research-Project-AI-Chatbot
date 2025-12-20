@@ -1,29 +1,28 @@
 // src/app/components/AuthGate.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useAuth } from "~/lib/auth";
-import AuthComponent from "./AuthComponent";
+import { useRouter } from "next/navigation";
 
 export default function AuthGate({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isSignedIn } = useAuth();
-  const [open, setOpen] = useState(true);
+  const { isSignedIn, isLoaded } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      router.replace("/sign-in");
+    }
+  }, [isLoaded, isSignedIn, router]);
 
   const content = useMemo(() => {
-    if (isSignedIn) return <>{children}</>;
-
-    return (
-      <div className="min-h-screen bg-blue-950 flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-white rounded-xl border shadow-xl p-6">
-          <AuthComponent forceOpen={open} onClose={() => setOpen(false)} />
-        </div>
-      </div>
-    );
-  }, [children, isSignedIn, open]);
+    if (!isLoaded || !isSignedIn) return null; // Show nothing while redirecting
+    return <>{children}</>;
+  }, [children, isSignedIn, isLoaded]);
 
   return content;
 }
