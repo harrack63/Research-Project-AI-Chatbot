@@ -1,3 +1,4 @@
+import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message } from '~/lib/types';
@@ -103,16 +104,17 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
   let language = "text";
   let codeContent = "";
 
-  if (children && typeof children === "object" && "props" in children) {
-    const childProps = (children as any).props;
+  if (React.isValidElement(children)) {
+    const childProps = children.props as { className?: string; children?: React.ReactNode };
     // rehype-highlight usually adds 'hljs language-xyz'
-    const className = childProps.className || "";
+    const className = (childProps.className as string) || "";
     const match = /language-(\w+)/.exec(className);
     if (match) {
       language = match[1];
     }
     // Get raw text content for the copy button
-    codeContent = String(childProps.children).replace(/\n$/, "");
+    const raw = childProps.children ?? "";
+    codeContent = String(raw).replace(/\n$/, "");
   }
 
   return (
@@ -131,7 +133,7 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
       
       {/* Code Area */}
       <div className="p-4 overflow-x-auto">
-        <pre className="!bg-transparent !p-0 !m-0 !border-0 font-mono text-sm leading-relaxed">
+        <pre className="bg-transparent! p-0! m-0! border-0! font-mono text-sm leading-relaxed">
           {children}
         </pre>
       </div>

@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useAuth } from "~/lib/auth";
 import { useRouter } from "next/navigation";
 

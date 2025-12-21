@@ -6,6 +6,7 @@ import { generateUniqueChatId } from "~/lib/chatUtils";
 import { createNewChat } from "~/lib/chatStore";
 import { sendChatMessageStream } from "~/utils/utils";
 import { useAuth } from "~/lib/auth";
+import { basePath } from "~/lib/global_vars";
 
 const MESSAGES_STORAGE_KEY = "healthbot_messages_";
 
@@ -190,7 +191,7 @@ export function useChat(userId: string, currentChatId?: string) {
       window.history.replaceState(
         {},
         "",
-        `/chat?id=${currentChatId}`
+        `${basePath}/chat?id=${currentChatId}`
       );
 
       const userMessage: Message = {
