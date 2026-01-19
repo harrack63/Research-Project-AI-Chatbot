@@ -24,7 +24,7 @@ export default function RootLayout({
       <head>
         <title>HealthBot</title>
         <meta name="description" content="HealthBot AI Assistant" />
-        <link rel="icon" href="/healthChatbot/favicon.ico" />
+        <link rel="icon" href="/favicon.ico" sizes="any"/>
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-neutral min-h-screen text-secondary antialiased`}

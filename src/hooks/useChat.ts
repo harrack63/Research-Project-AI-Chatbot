@@ -5,8 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { generateUniqueChatId } from "~/lib/chatUtils";
 import { createNewChat } from "~/lib/chatStore";
 import { sendChatMessageStream } from "~/utils/utils";
-import { useAuth } from "~/lib/auth";
-import { basePath } from "~/lib/global_vars";
+import { popPendingFirstMessage, setPendingFirstMessage } from "~/lib/pendingFirstMessage";
 
 const MESSAGES_STORAGE_KEY = "healthbot_messages_";
 
@@ -149,18 +148,16 @@ export function useChat(userId: string, currentChatId?: string) {
       }
 
       if (!currentChatId) {
-        // Create new chat with query param routing
+        // Create new chat and route there WITHOUT leaking message into URL.
         const newChatId = generateUniqueChatId(userId);
         const title = userInput.substring(0, 50).split("\n")[0] || "New Chat";
         createNewChat(newChatId, title);
 
         window.dispatchEvent(new CustomEvent("chats-updated"));
 
-        // Use query params instead of path
-        router.push(
-          `/chat?id=${newChatId}&firstMessage=${encodeURIComponent(userInput)}`
-        );
-        return;
+        setPendingFirstMessage(newChatId, userInput);
+
+        router.push(`/chat?id=${encodeURIComponent(newChatId)}`);
       }
 
       const userMessage: Message = {
@@ -180,31 +177,29 @@ export function useChat(userId: string, currentChatId?: string) {
     abortControllerRef.current?.abort();
   };
 
-  // Handle first message from URL
   useEffect(() => {
     if (!currentChatId) return;
+    if (!userId) return;
+    if (messages.length > 0) return;
 
-    const firstMessage = searchParams.get("firstMessage");
+    const pending = popPendingFirstMessage(currentChatId);
+    if (!pending) return;
 
-    if (firstMessage && messages.length === 0) {
-      // Clear the URL param
-      window.history.replaceState(
-        {},
-        "",
-        `${basePath}/chat?id=${currentChatId}`
-      );
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: pending,
+      timestamp: new Date(),
+    };
 
-      const userMessage: Message = {
-        id: `user-${Date.now()}`,
-        role: "user",
-        content: firstMessage,
-        timestamp: new Date(),
-      };
-      setMessages([userMessage]);
+    // Render it immediately
+    setMessages([userMessage]);
 
-      processMessage(firstMessage);
-    }
-  }, [currentChatId, messages.length, processMessage, searchParams]);
+    // Send through your normal pipeline (adds assistant placeholder + streams)
+    // NOTE: processMessage expects the user message is already appended by sendMessage(),
+    // so we call it directly here AFTER setting messages.
+    processMessage(pending);
+  }, [currentChatId, messages.length, processMessage, userId]);
 
   return { messages, images, isLoading, sendMessage, stopResponse };
 }

@@ -2,6 +2,7 @@
 import type { ChatCategory, ChatImage } from "~/lib/types";
 
 const STORAGE_KEY = "healthbot_chats";
+const MESSAGES_STORAGE_KEY = "healthbot_messages_";
 
 let globalChats: ChatCategory[] = [];
 
@@ -85,7 +86,7 @@ export function deleteChat(chatId: string): void {
   setGlobalChats(updated);
 
   // ✅ Clear messages from localStorage
-  const messagesKey = `${STORAGE_KEY}${chatId}`;
+  const messagesKey = `${MESSAGES_STORAGE_KEY}${chatId}`;
   try {
     localStorage.removeItem(messagesKey);
   } catch (error) {
