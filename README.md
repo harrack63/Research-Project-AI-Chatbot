@@ -39,23 +39,18 @@ NEXT_PUBLIC_BACKEND_URL=https://hcss.cs.purdue.edu/healthChatbot-backend
 # alt (local)
 # NEXT_PUBLIC_BACKEND_URL=http://44.211.226.67:3009
 
-# Clerk (Auth)
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="YOUR_PUBLISHABLE_KEY"
-CLERK_SECRET_KEY="YOUR_SECRET_KEY"
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/chat
-NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/chat
-
 # Forge key (internal)
 FORGE_KEY="FORGE_KEY"
+
+# OPENAI key (For milvus db)
+OPENAI_KEY="OPENAI_KEY"
 ```
 
 ---
 
 ## 🧩 Main Features
 
-- 🔐 **Auth** — sign-in/sign-up with Clerk  
+- 🔐 **Auth** — sign-in/sign-up with custom authentication
 - 💬 **Chat** — persistent threads, pin/delete/search  
 - ⚙️ **Settings** — customize what Healthbot calls you + bot traits  
 - 🧭 **Sidebar** — keyboard shortcuts, categories (Today, 7 days, Older)  

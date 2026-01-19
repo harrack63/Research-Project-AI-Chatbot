@@ -66,6 +66,7 @@ export default function AuthComponent({
       <form 
         onSubmit={async (e) => {
           e.preventDefault();
+          e.stopPropagation();
           const formData = new FormData(e.currentTarget);
           const email = formData.get("email") as string;
           const password = formData.get("password") as string;
@@ -78,6 +79,8 @@ export default function AuthComponent({
           }
         }} 
         className="space-y-4"
+        method="POST"
+        action="javascript:void(0);"
       >
         {mode === "register" && (
           <div className="space-y-1.5">
@@ -98,6 +101,7 @@ export default function AuthComponent({
             name="email"
             type="email"
             required
+            autoComplete="email"
             className="w-full bg-slate-900 border border-slate-800 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
             placeholder="name@company.com"
           />
@@ -109,6 +113,7 @@ export default function AuthComponent({
             name="password"
             type="password"
             required
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
             className="w-full bg-slate-900 border border-slate-800 text-white rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
             placeholder="••••••••"
           />

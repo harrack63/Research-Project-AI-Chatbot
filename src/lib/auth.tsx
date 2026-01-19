@@ -96,8 +96,12 @@ export function useAuth() {
       try {
         const res = await fetch(`${API_BASE}/api/auth/login`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Accept": "application/json", 
+          },
           body: JSON.stringify({ email, password }),
+          credentials: "include",
         });
 
           if (!res.ok) {
@@ -134,8 +138,12 @@ export function useAuth() {
       try {
         const res = await fetch(`${API_BASE}/api/auth/register`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Accept": "application/json", 
+          },
           body: JSON.stringify({ email, password, name }),
+          credentials: "include",
         });
 
           if (!res.ok) {
