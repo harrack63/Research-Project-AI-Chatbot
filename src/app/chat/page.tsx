@@ -119,7 +119,7 @@ function ChatContent() {
       </div>
 
       <main className="flex-1 flex flex-col relative min-w-0">
-        <ChatArea key={chatId} chatId={chatId} />
+        <ChatArea chatId={chatId} />
       </main>
 
       {hasImages && (

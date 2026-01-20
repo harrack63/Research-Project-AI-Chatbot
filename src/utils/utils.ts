@@ -1,6 +1,6 @@
 // utils/utils.ts
 import type { ChatImage, Message } from "~/lib/types";
-import { API_BASE, API_ROUTES } from "~/lib/api";
+import { API_ROUTES } from "~/lib/api";
 import { getAuthToken } from "~/lib/auth";
 
 export async function sendChatMessageStream(

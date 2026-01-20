@@ -189,26 +189,20 @@ export function useChat(userId: string, currentChatId?: string) {
         timestamp: new Date(),
       };
 
-      const nextMessages = [...messagesRef.current, userMessage, assistantMessage];
+      // Append to existing thread (do NOT replace whole state)
+      const nextMessages = [
+        ...messagesRef.current,
+        userMessage,
+        assistantMessage,
+      ];
       setMessagesWithRef(nextMessages);
+
+      // Persist immediately so reload/clicking thread always shows it
       persistMessages(currentChatId, nextMessages);
 
-      await processOutgoing([...messagesRef.current.slice(0, -2), userMessage]);
-
-      // // Append to existing thread (do NOT replace whole state)
-      // const nextMessages = [
-      //   ...messagesRef.current,
-      //   userMessage,
-      //   assistantMessage,
-      // ];
-      // setMessagesWithRef(nextMessages);
-
-      // // Persist immediately so reload/clicking thread always shows it
-      // persistMessages(currentChatId, nextMessages);
-
-      // // Stream with full context so backend sees the conversation so far.
-      // // (If you want "last N" only, slice here.)
-      // processOutgoing([...messagesRef.current, userMessage]);
+      // Stream with full context so backend sees the conversation so far.
+      // (If you want "last N" only, slice here.)
+      processOutgoing([...messagesRef.current, userMessage]);
     },
     [
       currentChatId,
@@ -239,15 +233,23 @@ export function useChat(userId: string, currentChatId?: string) {
       timestamp: new Date(),
     };
 
-    setMessagesWithRef([userMessage]);
+    const assistantMessage: Message = {
+      id: `assistant-${Date.now() + 1}`,
+      role: "assistant",
+      content: "",
+      timestamp: new Date(),
+    };
+
+    // Render immediately so "Start a conversation..." disappears
+    const initial = [userMessage, assistantMessage];
+    setMessagesWithRef(initial);
+
+    // Persist immediately so clicking sidebar always loads the first message
+    persistMessages(currentChatId, initial);
+
+    // Stream (use the outgoing array the backend expects)
     processOutgoing([userMessage]);
-  }, [
-    currentChatId,
-    messages.length,
-    processOutgoing,
-    setMessagesWithRef,
-    userId,
-  ]);
+  }, [currentChatId, messages.length, persistMessages, processOutgoing, setMessagesWithRef, userId]);
 
   return { messages, images, isLoading, sendMessage, stopResponse };
 }
