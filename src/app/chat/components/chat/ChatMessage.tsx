@@ -1,21 +1,16 @@
-import React from 'react';
+import React, { memo, useCallback, useState } from "react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Message } from '~/lib/types';
 import rehypeHighlight from 'rehype-highlight';
 import { Check, Copy, Terminal } from 'lucide-react';
-import { useState } from 'react';
 
 type ChatMessageProps = {
   message: Message;
 };
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+const ChatMessage = memo(function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
-
-  if (message.role === 'assistant') {
-    console.log("Raw Model Output:", JSON.stringify(message.content));
-  }
 
   if (isUser) {
     return (
@@ -97,7 +92,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       </div>
     </div>
   );
-}
+});
 
 function CodeBlock({ children }: { children: React.ReactNode }) {
   // Extract the language from the code element's className if possible
@@ -144,11 +139,11 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 function CopyButton({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [content]);
 
   return (
     <button
@@ -164,3 +159,5 @@ function CopyButton({ content }: { content: string }) {
     </button>
   );
 }
+
+export default ChatMessage;

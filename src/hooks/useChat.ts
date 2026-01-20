@@ -1,11 +1,14 @@
 // src/hooks/useChat.ts
 import { useState, useCallback, useEffect, useRef } from "react";
 import type { ChatImage, Message } from "~/lib/types";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { generateUniqueChatId } from "~/lib/chatUtils";
 import { createNewChat } from "~/lib/chatStore";
 import { sendChatMessageStream } from "~/utils/utils";
-import { popPendingFirstMessage, setPendingFirstMessage } from "~/lib/pendingFirstMessage";
+import {
+  popPendingFirstMessage,
+  setPendingFirstMessage,
+} from "~/lib/pendingFirstMessage";
 
 const MESSAGES_STORAGE_KEY = "healthbot_messages_";
 
@@ -15,39 +18,73 @@ export function useChat(userId: string, currentChatId?: string) {
   const [images, setImages] = useState<ChatImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
+
+  const messagesRef = useRef<Message[]>([]);
+
+  const setMessagesWithRef = useCallback(
+    (updater: Message[] | ((prev: Message[]) => Message[])) => {
+      setMessages((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        messagesRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
+
+  const persistMessages = useCallback((chatId: string, msgs: Message[]) => {
+    try {
+      localStorage.setItem(
+        `${MESSAGES_STORAGE_KEY}${chatId}`,
+        JSON.stringify(
+          msgs.map((msg) => ({
+            ...msg,
+            timestamp:
+              msg.timestamp instanceof Date
+                ? msg.timestamp.toISOString()
+                : new Date(msg.timestamp).toISOString(),
+          })),
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to save messages:", error);
+    }
+  }, []);
+
+  const loadMessages = useCallback((chatId: string): Message[] => {
+    try {
+      const stored = localStorage.getItem(`${MESSAGES_STORAGE_KEY}${chatId}`);
+      if (!stored) return [];
+      return JSON.parse(stored).map((msg: Message) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp),
+      }));
+    } catch (error) {
+      console.error("Failed to load messages:", error);
+      return [];
+    }
+  }, []);
 
   // Load messages from localStorage on mount
   useEffect(() => {
     if (!currentChatId) {
-      setMessages([]);
+      setMessagesWithRef([]);
       return;
     }
 
-    try {
-      const stored = localStorage.getItem(
-        `${MESSAGES_STORAGE_KEY}${currentChatId}`
-      );
-      if (stored) {
-        const parsedMessages = JSON.parse(stored).map((msg: Message) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp),
-        }));
-        setMessages(parsedMessages);
-      }
-    } catch (error) {
-      console.error("Failed to load messages:", error);
-      setMessages([]);
-    }
-  }, [currentChatId]);
+    setMessagesWithRef(loadMessages(currentChatId));
+  }, [currentChatId, loadMessages, setMessagesWithRef]);
 
-  const addMessage = useCallback((message: Message) => {
-    setMessages((prev) => [...prev, message]);
-  }, []);
+  const addMessage = useCallback(
+    (message: Message) => {
+      setMessagesWithRef((prev) => [...prev, message]);
+    },
+    [setMessagesWithRef],
+  );
 
   const updateLastMessage = useCallback(
     (content: string | ((prev: string) => string)) => {
-      setMessages((prev) => {
+      setMessagesWithRef((prev) => {
         const updated = [...prev];
         if (updated.length > 0) {
           const lastMsg = updated[updated.length - 1];
@@ -62,11 +99,11 @@ export function useChat(userId: string, currentChatId?: string) {
         return updated;
       });
     },
-    []
+    [setMessagesWithRef],
   );
 
-  const processMessage = useCallback(
-    async (userInput: string) => {
+  const processOutgoing = useCallback(
+    async (outgoingMessages: Message[]) => {
       if (!userId) {
         console.error("Attempted to send message without User ID.");
         return;
@@ -76,25 +113,17 @@ export function useChat(userId: string, currentChatId?: string) {
       const ac = new AbortController();
       abortControllerRef.current = ac;
 
-      const assistantMessage: Message = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-      };
-      addMessage(assistantMessage);
+      // const assistantMessage: Message = {
+      //   id: `assistant-${Date.now()}`,
+      //   role: "assistant",
+      //   content: "",
+      //   timestamp: new Date(),
+      // };
+      // addMessage(assistantMessage);
 
       try {
         await sendChatMessageStream(
-          [
-            ...messages,
-            {
-              role: "user",
-              content: userInput,
-              id: `user-${Date.now()}`,
-              timestamp: new Date(),
-            },
-          ] as Message[],
+          outgoingMessages,
           userId,
           (token: string): void => {
             updateLastMessage((prev) => prev + token);
@@ -104,26 +133,11 @@ export function useChat(userId: string, currentChatId?: string) {
               setImages((prev) => [...prev, ...newImages]);
             }
           },
-          ac.signal
+          ac.signal,
         );
 
         if (currentChatId && !ac.signal.aborted) {
-          try {
-            setMessages((prev) => {
-              localStorage.setItem(
-                `${MESSAGES_STORAGE_KEY}${currentChatId}`,
-                JSON.stringify(
-                  prev.map((msg) => ({
-                    ...msg,
-                    timestamp: msg.timestamp.toISOString(),
-                  }))
-                )
-              );
-              return prev;
-            });
-          } catch (error) {
-            console.error("Failed to save messages:", error);
-          }
+          persistMessages(currentChatId, messagesRef.current);
         }
       } catch (error) {
         if (!(error instanceof Error) || error.name !== "AbortError") {
@@ -135,7 +149,7 @@ export function useChat(userId: string, currentChatId?: string) {
         abortControllerRef.current = null;
       }
     },
-    [addMessage, currentChatId, messages, updateLastMessage, userId]
+    [currentChatId, persistMessages, updateLastMessage, userId],
   );
 
   const sendMessage = useCallback(
@@ -148,7 +162,7 @@ export function useChat(userId: string, currentChatId?: string) {
       }
 
       if (!currentChatId) {
-        // Create new chat and route there WITHOUT leaking message into URL.
+        // Create new chat and route
         const newChatId = generateUniqueChatId(userId);
         const title = userInput.substring(0, 50).split("\n")[0] || "New Chat";
         createNewChat(newChatId, title);
@@ -158,6 +172,7 @@ export function useChat(userId: string, currentChatId?: string) {
         setPendingFirstMessage(newChatId, userInput);
 
         router.push(`/chat?id=${encodeURIComponent(newChatId)}`);
+        return;
       }
 
       const userMessage: Message = {
@@ -166,11 +181,43 @@ export function useChat(userId: string, currentChatId?: string) {
         content: userInput,
         timestamp: new Date(),
       };
-      addMessage(userMessage);
 
-      await processMessage(userInput);
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now() + 1}`,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      };
+
+      const nextMessages = [...messagesRef.current, userMessage, assistantMessage];
+      setMessagesWithRef(nextMessages);
+      persistMessages(currentChatId, nextMessages);
+
+      await processOutgoing([...messagesRef.current.slice(0, -2), userMessage]);
+
+      // // Append to existing thread (do NOT replace whole state)
+      // const nextMessages = [
+      //   ...messagesRef.current,
+      //   userMessage,
+      //   assistantMessage,
+      // ];
+      // setMessagesWithRef(nextMessages);
+
+      // // Persist immediately so reload/clicking thread always shows it
+      // persistMessages(currentChatId, nextMessages);
+
+      // // Stream with full context so backend sees the conversation so far.
+      // // (If you want "last N" only, slice here.)
+      // processOutgoing([...messagesRef.current, userMessage]);
     },
-    [currentChatId, router, processMessage, addMessage, userId]
+    [
+      currentChatId,
+      persistMessages,
+      processOutgoing,
+      router,
+      setMessagesWithRef,
+      userId,
+    ],
   );
 
   const stopResponse = () => {
@@ -192,14 +239,15 @@ export function useChat(userId: string, currentChatId?: string) {
       timestamp: new Date(),
     };
 
-    // Render it immediately
-    setMessages([userMessage]);
-
-    // Send through your normal pipeline (adds assistant placeholder + streams)
-    // NOTE: processMessage expects the user message is already appended by sendMessage(),
-    // so we call it directly here AFTER setting messages.
-    processMessage(pending);
-  }, [currentChatId, messages.length, processMessage, userId]);
+    setMessagesWithRef([userMessage]);
+    processOutgoing([userMessage]);
+  }, [
+    currentChatId,
+    messages.length,
+    processOutgoing,
+    setMessagesWithRef,
+    userId,
+  ]);
 
   return { messages, images, isLoading, sendMessage, stopResponse };
 }

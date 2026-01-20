@@ -80,8 +80,6 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
     }
   };
 
-  // const loadingDots = [".", "..", "..."];
-
   return (
     <div className="flex-1 flex flex-col relative bg-linear-to-b bg-slate-800 overflow-hidden">
       {/* Scroll container */}
@@ -97,7 +95,7 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
             </div>
           ) : (
             <div className="space-y-6 max-w-2xl mx-auto w-full">
-              {messages.map((message, index) => (
+              {messages.map((message) => (
                 <ChatMessage 
                 key={message.id} 
                 message={message} 

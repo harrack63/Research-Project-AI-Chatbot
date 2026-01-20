@@ -53,6 +53,8 @@ export async function sendChatMessageStream(
         .find((l) => l.startsWith("data: "));
       
       if (!dataLine) continue;
+
+      console.log("Received data line:", dataLine);
       
       try {
         const data = JSON.parse(dataLine.slice(6));

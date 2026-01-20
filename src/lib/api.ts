@@ -1,7 +1,11 @@
 function resolveApiBase(): string {
   // Explicit override (recommended)
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
-  if (envUrl && envUrl.trim().length > 0) return envUrl.replace(/\/$/, "");
+  if (envUrl && envUrl.trim().length > 0) {
+    const cleaned = envUrl.replace(/\/$/, "");
+    // Browsers can't reliably call 0.0.0.0; it's a bind address.
+    return cleaned.replace("://0.0.0.0", "://127.0.0.1");
+  }
 
   // Client-side fallback: use same origin as the page (keeps https://)
   if (typeof window !== "undefined") {
@@ -18,7 +22,7 @@ export const API_BASE = resolveApiBase();
 export const API_ROUTES = {
   chatStream: `${API_BASE}/api/chat/stream`,
   userPreferences: `${API_BASE}/api/user/preferences`,
-  login: `${API_BASE}/auth/login`,
-  register: `${API_BASE}/auth/register`,
+  login: `${API_BASE}/api/auth/login`,
+  register: `${API_BASE}/api/auth/register`,
   logout: `${API_BASE}/auth/logout`,
 };

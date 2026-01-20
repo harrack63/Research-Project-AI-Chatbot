@@ -3,6 +3,7 @@
 
 import { Geist, Geist_Mono } from "next/font/google";
 import "~/styles/globals.css";
+import { basePath } from "~/lib/global_vars";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,7 +25,7 @@ export default function RootLayout({
       <head>
         <title>HealthBot</title>
         <meta name="description" content="HealthBot AI Assistant" />
-        <link rel="icon" href="/favicon.ico" sizes="any"/>
+        <link rel="icon" href={`${basePath}/favicon.ico`} sizes="any" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} bg-neutral min-h-screen text-secondary antialiased`}
