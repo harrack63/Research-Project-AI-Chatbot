@@ -23,7 +23,7 @@ function ChatContent() {
   });
   const [showRight, setShowRight] = useState(false);
   const [hasImages, setHasImages] = useState(false);
-  const [firstResponseReceived, setFirstResponseReceived] = useState(false);
+  const [firstResponseReceived, setFirstResponseReceived] = useState(false); // For images---functionality isnt implemented yet. 
   const [rightWidth, setRightWidth] = useState(400);
 
   const searchParams = useSearchParams();

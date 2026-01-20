@@ -36,13 +36,6 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const canRetryUserMessage = (userMsgId: string) => {
-    const idx = messages.findIndex((m) => m.id === userMsgId);
-    if (idx === -1) return false;
-    // if any assistant exists after this message, allow retry
-    return messages.slice(idx + 1).some((m) => m.role === "assistant");
-  };
-
   // Animate loading dots
   useEffect(() => {
     if (!isLoading) return;
