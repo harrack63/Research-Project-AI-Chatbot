@@ -1,7 +1,7 @@
 // components/ChatArea.tsx
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { useChat } from "~/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
@@ -14,9 +14,18 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
   const { user } = useAuth();
   const userId = user?.id || "";
 
-  const { messages, isLoading, sendMessage, stopResponse } = useChat(userId, chatId);
+  const {
+    messages,
+    isLoading,
+    sendMessage,
+    stopResponse,
+    retryFromUserMessage,
+    editUserMessage,
+    copyMessage,
+  } = useChat(userId, chatId);
 
   const [input, setInput] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [dotPosition, setDotPosition] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -25,6 +34,13 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const canRetryUserMessage = (userMsgId: string) => {
+    const idx = messages.findIndex((m) => m.id === userMsgId);
+    if (idx === -1) return false;
+    // if any assistant exists after this message, allow retry
+    return messages.slice(idx + 1).some((m) => m.role === "assistant");
   };
 
   // Animate loading dots
@@ -62,7 +78,34 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
     textareaRef.current?.focus();
   });
 
+  const uiLocked = isLoading || editingMessageId !== null;
+
+  const findPrevUserIdForAssistant = useCallback(
+    (assistantId: string): string | null => {
+      const idx = messages.findIndex((m) => m.id === assistantId);
+      if (idx === -1) return null;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i]?.role === "user") return messages[i]!.id;
+      }
+      return null;
+    },
+    [messages]
+  );
+
+  const handleEdit = useCallback(
+    async (messageId: string, newText: string) => {
+      setEditingMessageId(messageId);
+      try {
+        await editUserMessage(messageId, newText);
+      } finally {
+        setEditingMessageId(null);
+      }
+    },
+    [editUserMessage]
+  );
+
   const handleSend = async () => {
+    if (uiLocked) return;
     if (input.trim()) {
       await sendMessage(input);
       setInput("");
@@ -70,7 +113,7 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (isLoading) {
+    if (uiLocked) {
       e.preventDefault();
       return;
     }
@@ -97,9 +140,30 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
             <div className="space-y-6 max-w-2xl mx-auto w-full">
               {messages.map((message) => (
                 <ChatMessage 
-                key={message.id} 
-                message={message} 
-              />
+                  key={message.id}
+                  message={message}
+                  uiLocked={uiLocked}
+                  onCopy={uiLocked ? undefined : copyMessage}
+                  onEdit={
+                    message.role === "user"
+                      ? async (newText) => {
+                          // lock UI while editing submit occurs
+                          await handleEdit(message.id, newText);
+                        }
+                      : undefined
+                  }
+                  onRetry={
+                    message.role === "assistant"
+                      ? () => {
+                          if (uiLocked) return;
+                          const prevUserId =
+                            findPrevUserIdForAssistant(message.id);
+                          if (!prevUserId) return;
+                          return retryFromUserMessage(prevUserId);
+                        }
+                      : undefined
+                  }
+                />
               ))}
                {isLoading &&
                 // Find the latest assistant message (placeholder added by useChat)
@@ -163,12 +227,12 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
             placeholder="Type your prompt to the bot..."
             minRows={3}
             maxRows={12} // Limits growth so it doesn't cover the whole screen
-            disabled={isLoading}
+            disabled={uiLocked}
             className="flex-1 bg-linear-to-b from-slate-900 to-slate-950 border border-slate-950 text-white placeholder-zinc-500 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-900 resize-none overflow-hidden"
           />
           <button
             onClick={() => (isLoading ? stopResponse() : handleSend())}
-            disabled={!isLoading && !input.trim()}
+            disabled={(uiLocked && !isLoading) || (!isLoading && !input.trim())}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {isLoading ? (

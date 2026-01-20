@@ -21,6 +21,9 @@ export function useChat(userId: string, currentChatId?: string) {
 
   const messagesRef = useRef<Message[]>([]);
 
+  const inFlightChatIdRef = useRef<string | undefined>(undefined);
+  const inFlightUserMsgIdRef = useRef<string | null>(null);
+
   const setMessagesWithRef = useCallback(
     (updater: Message[] | ((prev: Message[]) => Message[])) => {
       setMessages((prev) => {
@@ -50,6 +53,16 @@ export function useChat(userId: string, currentChatId?: string) {
       console.error("Failed to save messages:", error);
     }
   }, []);
+
+  // Wrapper to persist messages for the in-flight chat if no chatId given
+  const persistIfPossible = useCallback(
+    (maybeChatId: string | undefined, msgs: Message[]) => {
+      const chatId = maybeChatId ?? inFlightChatIdRef.current;
+      if (!chatId) return;
+      persistMessages(chatId, msgs);
+    },
+    [persistMessages]
+  );
 
   const loadMessages = useCallback((chatId: string): Message[] => {
     try {
@@ -113,13 +126,18 @@ export function useChat(userId: string, currentChatId?: string) {
       const ac = new AbortController();
       abortControllerRef.current = ac;
 
-      // const assistantMessage: Message = {
-      //   id: `assistant-${Date.now()}`,
-      //   role: "assistant",
-      //   content: "",
-      //   timestamp: new Date(),
-      // };
-      // addMessage(assistantMessage);
+      // capture which chat and which user-msg started the stream
+      inFlightChatIdRef.current = currentChatId;
+      const lastUser = [...outgoingMessages].reverse().find((m) => m.role === "user");
+      inFlightUserMsgIdRef.current = lastUser?.id ?? null;
+
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      };
+      addMessage(assistantMessage);
 
       try {
         await sendChatMessageStream(
@@ -136,20 +154,23 @@ export function useChat(userId: string, currentChatId?: string) {
           ac.signal,
         );
 
-        if (currentChatId && !ac.signal.aborted) {
-          persistMessages(currentChatId, messagesRef.current);
+        if (!ac.signal.aborted) {
+          persistIfPossible(currentChatId, messagesRef.current);
         }
       } catch (error) {
         if (!(error instanceof Error) || error.name !== "AbortError") {
           console.error("Error sending message:", error);
           updateLastMessage("There was an error contacting the server.");
+          // persist error message too
+          persistIfPossible(currentChatId, messagesRef.current);
         }
       } finally {
         setIsLoading(false);
         abortControllerRef.current = null;
+        inFlightUserMsgIdRef.current = null;
       }
     },
-    [currentChatId, persistMessages, updateLastMessage, userId],
+    [addMessage, currentChatId, persistIfPossible, updateLastMessage, userId],
   );
 
   const sendMessage = useCallback(
@@ -251,5 +272,84 @@ export function useChat(userId: string, currentChatId?: string) {
     processOutgoing([userMessage]);
   }, [currentChatId, messages.length, persistMessages, processOutgoing, setMessagesWithRef, userId]);
 
-  return { messages, images, isLoading, sendMessage, stopResponse };
+  const retryFromUserMessage = useCallback(
+    async (userMessageId: string) => {
+      if (!currentChatId) return;
+      if (isLoading) return;
+
+      const idx = messagesRef.current.findIndex((m) => m.id === userMessageId);
+      if (idx === -1) return;
+      if (messagesRef.current[idx].role !== "user") return;
+
+      // Keep everything up to and including this user message
+      const prefix = messagesRef.current.slice(0, idx + 1);
+
+      // Add fresh assistant placeholder
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      };
+
+      const next = [...prefix, assistantMessage];
+      setMessagesWithRef(next);
+      persistMessages(currentChatId, next);
+
+      // Stream from this point with context = prefix (no assistant)
+      await processOutgoing(prefix);
+    },
+    [currentChatId, isLoading, persistMessages, processOutgoing, setMessagesWithRef]
+  );
+
+  const editUserMessage = useCallback(
+    async (userMessageId: string, newContent: string) => {
+      if (!currentChatId) return;
+      if (isLoading) return;
+      const trimmed = newContent.trim();
+      if (!trimmed) return;
+
+      const idx = messagesRef.current.findIndex((m) => m.id === userMessageId);
+      if (idx === -1) return;
+      const target = messagesRef.current[idx];
+      if (target.role !== "user") return;
+
+      // Replace content, drop everything after it, then re-run
+      const updatedUser: Message = { ...target, content: trimmed, timestamp: new Date() };
+      const prefix = [...messagesRef.current.slice(0, idx), updatedUser];
+
+      const assistantMessage: Message = {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      };
+
+      const next = [...prefix, assistantMessage];
+      setMessagesWithRef(next);
+      persistMessages(currentChatId, next);
+
+      await processOutgoing(prefix);
+    },
+    [currentChatId, isLoading, persistMessages, processOutgoing, setMessagesWithRef]
+  );
+
+  const copyMessage = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (e) {
+      console.error("Clipboard copy failed:", e);
+    }
+  }, []);
+
+  return {
+    messages,
+    images,
+    isLoading,
+    sendMessage,
+    stopResponse,
+    retryFromUserMessage,
+    editUserMessage,
+    copyMessage,
+  };
 }
