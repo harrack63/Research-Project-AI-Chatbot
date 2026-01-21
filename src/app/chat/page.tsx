@@ -21,9 +21,14 @@ function ChatContent() {
       return true;
     }
   });
-  const [showRight, setShowRight] = useState(false);
-  const [hasImages, setHasImages] = useState(false);
-  const [firstResponseReceived, setFirstResponseReceived] = useState(false); // For images---functionality isnt implemented yet. 
+  const [showRight, setShowRight] = useState(() => {
+    try {
+      const savedState = localStorage.getItem("sidebarRightOpen");
+      return savedState !== null ? savedState === "true" : true;
+    } catch {
+      return true;
+    }
+  });
   const [rightWidth, setRightWidth] = useState(400);
 
   const searchParams = useSearchParams();
@@ -41,6 +46,9 @@ function ChatContent() {
   const toggleRight = () => {
     setShowRight((p) => {
       const newValue = !p;
+      try {
+        localStorage.setItem("sidebarRightOpen", String(newValue));
+      } catch {}
       if (newValue) {
         const availableSpace = window.innerWidth - rightWidth;
         const minSpaceNeeded = 768;
@@ -84,26 +92,6 @@ function ChatContent() {
     }
   }, [chatId, router]);
 
-  // Check for images
-  useEffect(() => {
-    if (!chatId) return;
-
-    const checkImages = () => {
-      const chats = getGlobalChats();
-      const chat = chats.flatMap((c) => c.chats).find((c) => c.id === chatId);
-      const imagesExist = (chat?.images || []).length > 0;
-      setHasImages(imagesExist);
-
-      if (imagesExist && firstResponseReceived && !showRight) {
-        setShowRight(true);
-      }
-    };
-
-    checkImages();
-    const interval = setInterval(checkImages, 500);
-    return () => clearInterval(interval);
-  }, [chatId, firstResponseReceived, showRight]);
-
   // Load chats
   useEffect(() => {
     loadChats();
@@ -122,14 +110,12 @@ function ChatContent() {
         <ChatArea chatId={chatId} />
       </main>
 
-      {hasImages && (
-        <SidebarRight
-          isOpen={showRight}
-          onToggle={toggleRight}
-          width={rightWidth}
-          onWidthChange={handleRightWidthChange}
-        />
-      )}
+      <SidebarRight
+        isOpen={showRight}
+        onToggle={toggleRight}
+        width={rightWidth}
+        onWidthChange={handleRightWidthChange}
+      />
     </div>
   );
 }
