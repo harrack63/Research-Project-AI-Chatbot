@@ -2,8 +2,12 @@
 out/
 dist/
 
+
+.astro/
+.github/
 .env.local
 .env
+.cursorignore
 
 # dependencies
 /node_modules

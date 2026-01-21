@@ -90,7 +90,7 @@ export default function SearchModal({
               {filteredChats.map((chat) => (
                 <Link
                   key={chat.id}
-                  href={`/chat/${chat.id}`}
+                  href={`/chat?id=${chat.id}`}
                   onClick={onClose}
                   className="block hover:bg-slate-800 transition-colors border-b border-slate-700 last:border-b-0"
                 >
