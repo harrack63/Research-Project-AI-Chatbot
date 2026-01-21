@@ -1,6 +1,7 @@
 // src/lib/auth.tsx
 import { useCallback, useSyncExternalStore } from "react";
 import { API_BASE } from "~/lib/api";
+import { clearCachedPreferences } from "~/lib/userPreferencesStore";
 
 type User = {
   id: string;
@@ -68,6 +69,7 @@ function writeAuth(user: User, token: string) {
 function clearAuth() {
   window.localStorage.removeItem(TOKEN_KEY);
   window.localStorage.removeItem(USER_KEY);
+  clearCachedPreferences();
   window.dispatchEvent(new Event(AUTH_EVENT));
 }
 

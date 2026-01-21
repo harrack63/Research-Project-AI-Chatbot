@@ -1,6 +1,8 @@
 .DS_Store
 out/
 dist/
+.astro/
+.github/
 
 .env.local
 .env

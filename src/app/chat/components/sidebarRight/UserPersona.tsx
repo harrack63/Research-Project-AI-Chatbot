@@ -4,6 +4,10 @@ import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp, X, Star } from "lucide-react";
 import { fetchUserPreferences, saveUserPreferences } from "~/lib/api";
 import { useAuth } from "~/lib/auth";
+import {
+  getCachedPreferences,
+  setCachedPreferences,
+} from "~/lib/userPreferencesStore";
 
 type PersonaState = {
   // Demographics
@@ -115,6 +119,8 @@ const emptyPersona: PersonaState = {
   goals: null,
 };
 
+const fetchedUserIds = new Set<string>();
+
 type SectionProps = {
   title: string;
   isOpen: boolean;
@@ -162,23 +168,41 @@ export default function UserPersona() {
   });
 
   useEffect(() => {
-    if (user) {
-      loadPreferences();
+    if (!user?.id) return;
+    const cached = getCachedPreferences(user.id);
+    if (cached?.persona) {
+      setPersona(cached.persona as PersonaState);
+      setGoals(cached.goals || "");
+      setLoading(false);
     }
-  }, [user]);
+    if (!fetchedUserIds.has(user.id)) {
+      fetchedUserIds.add(user.id);
+      loadPreferences(user.id, !!cached);
+    } else {
+      setLoading(false);
+    }
+  }, [user?.id]);
 
-  const loadPreferences = async () => {
+  const loadPreferences = async (userId: string, silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const result = await fetchUserPreferences();
       if (result.ok && result.preferences) {
-        setPersona(result.preferences.persona || emptyPersona);
-        setGoals(result.preferences.goals || "");
+        const nextPersona = result.preferences.persona || emptyPersona;
+        const nextGoals = result.preferences.goals || "";
+        setPersona(nextPersona);
+        setGoals(nextGoals);
+        setCachedPreferences({
+          userId,
+          persona: nextPersona,
+          goals: nextGoals,
+          updatedAt: Date.now(),
+        });
       }
     } catch (error) {
       console.error("Failed to load preferences:", error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -187,6 +211,14 @@ export default function UserPersona() {
       setSaving(true);
       const result = await saveUserPreferences({ persona, goals: goals || null });
       if (result.ok) {
+        if (user?.id) {
+          setCachedPreferences({
+            userId: user.id,
+            persona,
+            goals: goals || null,
+            updatedAt: Date.now(),
+          });
+        }
         // Show success feedback
         const saveBtn = document.getElementById("save-persona-btn");
         if (saveBtn) {

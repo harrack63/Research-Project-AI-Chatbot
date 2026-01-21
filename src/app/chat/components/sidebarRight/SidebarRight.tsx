@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronRight, ChevronLeft, User, BarChart3 } from "lucide-react";
+import { ChevronRight, ChevronLeft, User } from "lucide-react";
 import UserPersona from "./UserPersona";
 import ImageGraphs from "./ImageGraphs";
 
