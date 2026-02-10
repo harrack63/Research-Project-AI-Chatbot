@@ -7,12 +7,32 @@ import SidebarLeft from "~/app/chat/components/sidebarLeft/SidebarLeft";
 import SidebarRight from "~/app/chat/components/sidebarRight/SidebarRight";
 import ChatArea from "~/app/chat/components/chat/ChatArea";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
-import { getGlobalChats, loadChats } from "~/lib/chatStore";
+import { chatHasMessages, createNewChat, getGlobalChats, loadChats, syncChatsWithServer } from "~/lib/chatStore";
+import type { Message } from "~/lib/types";
 
 import { Loader2 } from "lucide-react";
 import AuthGate from "~/app/components/AuthGate";
 
 function ChatContent() {
+  const recoverChatFromMessages = useCallback((missingChatId: string) => {
+    try {
+      const stored = localStorage.getItem(`healthbot_messages_${missingChatId}`);
+      if (!stored) return false;
+      const parsed = JSON.parse(stored) as Message[];
+      if (!Array.isArray(parsed) || parsed.length === 0) return false;
+
+      const firstUser = parsed.find((msg) => msg.role === "user");
+      const title =
+        firstUser?.content?.substring(0, 50).split("\n")[0] ||
+        "Recovered Chat";
+
+      createNewChat(missingChatId, title);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const [showLeft, setShowLeft] = useState(() => {
     try {
       const savedState = localStorage.getItem("sidebarLeftOpen");
@@ -30,6 +50,7 @@ function ChatContent() {
     }
   });
   const [rightWidth, setRightWidth] = useState(400);
+  const [chatsLoaded, setChatsLoaded] = useState(false);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -81,20 +102,27 @@ function ChatContent() {
   // Validate chat exists
   useEffect(() => {
     if (!chatId) return;
-
+    if (!chatsLoaded && !chatHasMessages(chatId)) return;
+    loadChats();
     const chats = getGlobalChats();
     const chatExists = chats
       .flatMap((c) => c.chats)
       .some((c) => c.id === chatId);
 
     if (!chatExists) {
-      router.replace(`/chat`);
+      const recovered = recoverChatFromMessages(chatId);
+      if (!recovered) {
+        router.replace(`/chat`);
+      }
     }
-  }, [chatId, router]);
+  }, [chatId, chatsLoaded, recoverChatFromMessages, router]);
 
   // Load chats
   useEffect(() => {
     loadChats();
+    void syncChatsWithServer().finally(() => {
+      setChatsLoaded(true);
+    });
   }, []);
 
   return (
