@@ -7,6 +7,9 @@ import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import TextareaAutosize from 'react-textarea-autosize';
 import { useAuth } from "~/lib/auth";
+import { UploadButton } from "~/utils/uploadthing";
+import { ingestUploadedDocument } from "~/utils/utils";
+import { toast, Toaster } from "sonner";
 
 const SCROLL_THRESHOLD = 3000;
 
@@ -28,6 +31,7 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [dotPosition, setDotPosition] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -71,7 +75,7 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
     textareaRef.current?.focus();
   });
 
-  const uiLocked = isLoading || editingMessageId !== null;
+  const uiLocked = isLoading || editingMessageId !== null || isUploading;
 
   const findPrevUserIdForAssistant = useCallback(
     (assistantId: string): string | null => {
@@ -118,6 +122,7 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
 
   return (
     <div className="flex-1 flex flex-col relative bg-linear-to-b bg-slate-800 overflow-hidden">
+      <Toaster position="bottom-right" theme="dark" richColors />
       {/* Scroll container */}
       <div
         ref={scrollContainerRef}
@@ -212,6 +217,77 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
       {/* Fixed input area at bottom */}
       <div className="absolute bottom-0 left-0 right-0 pt-8 pb-6 px-6 z-10">
         <div className="flex gap-3 max-w-2xl mx-auto relative">
+          <div className="flex items-end">
+            <UploadButton
+              endpoint="documentUploader"
+              disabled={isUploading || !userId}
+              onBeforeUploadBegin={(files) => {
+                const allowedExtensions = [".pdf", ".docx", ".txt"];
+                const filtered = files.filter((file) => {
+                  const lower = file.name.toLowerCase();
+                  return allowedExtensions.some((ext) => lower.endsWith(ext));
+                });
+
+                if (filtered.length !== files.length) {
+                  toast.error("Only PDF, DOCX, and TXT files are supported.");
+                }
+
+                if (!userId) {
+                  toast.error("Please sign in to upload documents.");
+                  return [];
+                }
+
+                if (filtered.length > 0) {
+                  setIsUploading(true);
+                }
+
+                return filtered;
+              }}
+              onClientUploadComplete={async (res) => {
+                const uploaded = res?.[0];
+                const fileUrl = uploaded?.serverData?.fileUrl ?? uploaded?.url;
+                const fileName = uploaded?.serverData?.fileName ?? uploaded?.name;
+                const fileType = uploaded?.serverData?.fileType ?? uploaded?.customId ?? "";
+
+                if (!fileUrl || !fileName) {
+                  toast.error("Upload failed. Please try again.");
+                  setIsUploading(false);
+                  return;
+                }
+
+                const toastId = toast.loading("Indexing document...");
+                const result = await ingestUploadedDocument(
+                  fileUrl,
+                  fileName,
+                  fileType || "",
+                  userId
+                );
+
+                if (!result.ok) {
+                  toast.error(result.detail || "Failed to index document.", { id: toastId });
+                } else {
+                  toast.success(
+                    `Document indexed (${result.chunks_indexed ?? 0} chunks).`,
+                    { id: toastId }
+                  );
+                }
+
+                setIsUploading(false);
+              }}
+              onUploadError={(error) => {
+                toast.error(error.message || "Upload failed.");
+                setIsUploading(false);
+              }}
+              appearance={{
+                button:
+                  "inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-200 shadow-sm hover:border-slate-500 hover:text-white transition-colors",
+                allowedContent: "hidden",
+              }}
+              content={{
+                button: isUploading ? "Uploading..." : "Upload",
+              }}
+            />
+          </div>
           <TextareaAutosize
             ref={textareaRef} // Keep the ref for keyboard shortcuts
             value={input}

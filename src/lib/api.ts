@@ -24,6 +24,7 @@ export const API_ROUTES = {
   chatStream: `${API_BASE}/api/chat/stream`,
   userPreferences: `${API_BASE}/api/user/preferences`,
   chats: `${API_BASE}/api/chats`,
+  uploadIngest: `${API_BASE}/api/uploads/ingest`,
   login: `${API_BASE}/api/auth/login`,
   register: `${API_BASE}/api/auth/register`,
   logout: `${API_BASE}/auth/logout`,
