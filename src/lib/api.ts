@@ -23,6 +23,8 @@ export const API_BASE = resolveApiBase();
 export const API_ROUTES = {
   chatStream: `${API_BASE}/api/chat/stream`,
   userPreferences: `${API_BASE}/api/user/preferences`,
+  chats: `${API_BASE}/api/chats`,
+  uploadIngest: `${API_BASE}/api/uploads/ingest`,
   login: `${API_BASE}/api/auth/login`,
   register: `${API_BASE}/api/auth/register`,
   logout: `${API_BASE}/auth/logout`,
@@ -80,6 +82,66 @@ export async function saveUserPreferences(preferences: { persona: any; goals?: s
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: "Failed to save preferences" }));
     return { ok: false, error: error.detail || error.message || "Failed to save preferences" };
+  }
+
+  return await res.json();
+}
+
+export async function fetchChats(): Promise<{ ok: boolean; chats?: any; updated_at?: string | null; error?: string }> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("healthbot_token") : null;
+  if (!token) {
+    return { ok: false, error: "Not authenticated" };
+  }
+
+  const res = await fetch(API_ROUTES.chats, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: "Failed to fetch chats" }));
+    return { ok: false, error: error.detail || error.message || "Failed to fetch chats" };
+  }
+
+  return await res.json();
+}
+
+export async function saveChatsToServer(
+  chats: any,
+  updatedAt: string
+): Promise<{ ok: boolean; updated_at?: string; error?: string }> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("healthbot_token") : null;
+  if (!token) {
+    return { ok: false, error: "Not authenticated" };
+  }
+
+  const userRaw = typeof window !== "undefined" ? localStorage.getItem("healthbot_user") : null;
+  const user = userRaw ? JSON.parse(userRaw) : null;
+  const userId = user?.id;
+
+  if (!userId) {
+    return { ok: false, error: "User ID not found" };
+  }
+
+  const res = await fetch(API_ROUTES.chats, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      chats,
+      updated_at: updatedAt,
+    }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ detail: "Failed to save chats" }));
+    return { ok: false, error: error.detail || error.message || "Failed to save chats" };
   }
 
   return await res.json();

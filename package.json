@@ -18,7 +18,9 @@
     "react-textarea-autosize": "^8.5.9",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
-    "sonner": "^2.0.7"
+    "sonner": "^2.0.7",
+    "uploadthing": "^7.7.4",
+    "@uploadthing/react": "^7.7.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

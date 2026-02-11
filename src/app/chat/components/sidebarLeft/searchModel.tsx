@@ -92,7 +92,7 @@ export default function SearchModal({
                   key={chat.id}
                   href={`/chat?id=${chat.id}`} // Link to chat by ID, not by /[id] because I dont have that page. DO NOT CHANGE.
                   onClick={onClose}
-                  className="block hover:bg-slate-800 transition-colors border-b border-slate-700 last:border-b-0"
+                  className="block hover:bg-slate-800 transitin-colors border-b border-slate-700 last:border-b-0"
                 >
                   <div className="px-6 py-4">
                     <p className="text-base font-medium text-white hover:text-blue-300 transition-colors">

@@ -28,6 +28,7 @@ export function useChat(userId: string, currentChatId?: string) {
 
   const messagesRef = useRef<Message[]>([]);
   const inFlightChatIdRef = useRef<string | undefined>(undefined);
+  const persistTimerRef = useRef<number | null>(null);
 
   const setMessagesWithRef = useCallback(
     (updater: Message[] | ((prev: Message[]) => Message[])) => {
@@ -82,6 +83,27 @@ export function useChat(userId: string, currentChatId?: string) {
     [persistMessages]
   );
 
+  const schedulePersist = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const chatId = currentChatId ?? inFlightChatIdRef.current;
+    if (!chatId) return;
+    if (persistTimerRef.current !== null) return;
+
+    persistTimerRef.current = window.setTimeout(() => {
+      persistTimerRef.current = null;
+      persistMessages(chatId, messagesRef.current);
+    }, 500);
+  }, [currentChatId, persistMessages]);
+
+  useEffect(() => {
+    return () => {
+      if (persistTimerRef.current !== null) {
+        window.clearTimeout(persistTimerRef.current);
+        persistTimerRef.current = null;
+      }
+    };
+  }, []);
+
   // Load messages for chatId
   useEffect(() => {
     if (!currentChatId) {
@@ -100,8 +122,9 @@ export function useChat(userId: string, currentChatId?: string) {
         });
         return next;
       });
+      schedulePersist();
     },
-    [setMessagesWithRef]
+    [schedulePersist, setMessagesWithRef]
   );
 
   const processOutgoing = useCallback(
@@ -132,7 +155,9 @@ export function useChat(userId: string, currentChatId?: string) {
           persistIfPossible(currentChatId, messagesRef.current);
         }
       } catch (error) {
-        if (!(error instanceof Error) || error.name !== "AbortError") {
+        if (error instanceof Error && error.name === "AbortError") {
+          persistIfPossible(currentChatId, messagesRef.current);
+        } else {
           console.error("Error sending message:", error);
           // write error into that assistant bubble
           setMessagesWithRef((prev) => {
