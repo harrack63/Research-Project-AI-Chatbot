@@ -1,31 +1,37 @@
 // components/ChatArea.tsx
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { useChat } from "~/hooks/useChat";
 import ChatMessage from "./ChatMessage";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
-import { useParams } from "next/navigation";
 import TextareaAutosize from 'react-textarea-autosize';
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "~/lib/auth";
+import { UploadButton } from "~/utils/uploadthing";
+import { ingestUploadedDocument } from "~/utils/utils";
+import { toast, Toaster } from "sonner";
 
 const SCROLL_THRESHOLD = 3000;
 
-type ChatAreaProps = {
-  onFirstResponse?: () => void;
-};
-
-export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
-  const params = useParams();
-  const chatId = params?.id as string | undefined;
-  const { user } = useUser();
+export default function ChatArea({ chatId }: { chatId?: string }) {
+  const { user } = useAuth();
   const userId = user?.id || "";
 
-  const { messages, isLoading, sendMessage, stopResponse } = useChat(userId, chatId);
+  const {
+    messages,
+    isLoading,
+    sendMessage,
+    stopResponse,
+    retryFromUserMessage,
+    editUserMessage,
+    copyMessage,
+  } = useChat(userId, chatId);
 
   const [input, setInput] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [dotPosition, setDotPosition] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -50,12 +56,6 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
   }, [messages]);
 
   useEffect(() => {
-    if (messages.some((m) => m.role === "assistant") && onFirstResponse) {
-      onFirstResponse();
-    }
-  }, [messages, onFirstResponse]);
-
-  useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
     if (!scrollContainer) return;
 
@@ -75,7 +75,34 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
     textareaRef.current?.focus();
   });
 
+  const uiLocked = isLoading || editingMessageId !== null || isUploading;
+
+  const findPrevUserIdForAssistant = useCallback(
+    (assistantId: string): string | null => {
+      const idx = messages.findIndex((m) => m.id === assistantId);
+      if (idx === -1) return null;
+      for (let i = idx - 1; i >= 0; i--) {
+        if (messages[i]?.role === "user") return messages[i]!.id;
+      }
+      return null;
+    },
+    [messages]
+  );
+
+  const handleEdit = useCallback(
+    async (messageId: string, newText: string) => {
+      setEditingMessageId(messageId);
+      try {
+        await editUserMessage(messageId, newText);
+      } finally {
+        setEditingMessageId(null);
+      }
+    },
+    [editUserMessage]
+  );
+
   const handleSend = async () => {
+    if (uiLocked) return;
     if (input.trim()) {
       await sendMessage(input);
       setInput("");
@@ -83,7 +110,7 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (isLoading) {
+    if (uiLocked) {
       e.preventDefault();
       return;
     }
@@ -93,10 +120,9 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
     }
   };
 
-  // const loadingDots = [".", "..", "..."];
-
   return (
     <div className="flex-1 flex flex-col relative bg-linear-to-b bg-slate-800 overflow-hidden">
+      <Toaster position="top-right" theme="dark" richColors />
       {/* Scroll container */}
       <div
         ref={scrollContainerRef}
@@ -110,11 +136,32 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
             </div>
           ) : (
             <div className="space-y-6 max-w-2xl mx-auto w-full">
-              {messages.map((message, index) => (
+              {messages.map((message) => (
                 <ChatMessage 
-                key={message.id} 
-                message={message} 
-              />
+                  key={message.id}
+                  message={message}
+                  uiLocked={uiLocked}
+                  onCopy={uiLocked ? undefined : copyMessage}
+                  onEdit={
+                    message.role === "user"
+                      ? async (newText) => {
+                          // lock UI while editing submit occurs
+                          await handleEdit(message.id, newText);
+                        }
+                      : undefined
+                  }
+                  onRetry={
+                    message.role === "assistant"
+                      ? () => {
+                          if (uiLocked) return;
+                          const prevUserId =
+                            findPrevUserIdForAssistant(message.id);
+                          if (!prevUserId) return;
+                          return retryFromUserMessage(prevUserId);
+                        }
+                      : undefined
+                  }
+                />
               ))}
                {isLoading &&
                 // Find the latest assistant message (placeholder added by useChat)
@@ -170,6 +217,77 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
       {/* Fixed input area at bottom */}
       <div className="absolute bottom-0 left-0 right-0 pt-8 pb-6 px-6 z-10">
         <div className="flex gap-3 max-w-2xl mx-auto relative">
+          <div className="flex items-end">
+            <UploadButton
+              endpoint={(routeRegistry) => routeRegistry.documentUploader}
+              disabled={isUploading || !userId}
+              onBeforeUploadBegin={(files) => {
+                const allowedExtensions = [".pdf", ".docx", ".txt"];
+                const filtered = files.filter((file) => {
+                  const lower = file.name.toLowerCase();
+                  return allowedExtensions.some((ext) => lower.endsWith(ext));
+                });
+
+                if (filtered.length !== files.length) {
+                  toast.error("Only PDF, DOCX, and TXT files are supported.");
+                }
+
+                if (!userId) {
+                  toast.error("Please sign in to upload documents.");
+                  return [];
+                }
+
+                if (filtered.length > 0) {
+                  setIsUploading(true);
+                }
+
+                return filtered;
+              }}
+              onClientUploadComplete={async (res) => {
+                const uploaded = res?.[0];
+                const fileUrl = uploaded?.serverData?.fileUrl ?? uploaded?.url;
+                const fileName = uploaded?.serverData?.fileName ?? uploaded?.name;
+                const fileType = uploaded?.serverData?.fileType ?? uploaded?.customId ?? "";
+
+                if (!fileUrl || !fileName) {
+                  toast.error("Upload failed. Please try again.");
+                  setIsUploading(false);
+                  return;
+                }
+
+                const toastId = toast.loading("Indexing document...");
+                const result = await ingestUploadedDocument(
+                  fileUrl,
+                  fileName,
+                  fileType || "",
+                  userId
+                );
+
+                if (!result.ok) {
+                  toast.error(result.detail || "Failed to index document.", { id: toastId });
+                } else {
+                  toast.success(
+                    `Document indexed (${result.chunks_indexed ?? 0} chunks).`,
+                    { id: toastId }
+                  );
+                }
+
+                setIsUploading(false);
+              }}
+              onUploadError={(error) => {
+                toast.error(error.message || "Upload failed.");
+                setIsUploading(false);
+              }}
+              appearance={{
+                button:
+                  "inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-200 shadow-sm hover:border-slate-500 hover:text-white transition-colors",
+                allowedContent: "hidden",
+              }}
+              content={{
+                button: isUploading ? "Uploading..." : "Upload",
+              }}
+            />
+          </div>
           <TextareaAutosize
             ref={textareaRef} // Keep the ref for keyboard shortcuts
             value={input}
@@ -178,12 +296,12 @@ export default function ChatArea({ onFirstResponse }: ChatAreaProps) {
             placeholder="Type your prompt to the bot..."
             minRows={3}
             maxRows={12} // Limits growth so it doesn't cover the whole screen
-            disabled={isLoading}
+            disabled={uiLocked}
             className="flex-1 bg-linear-to-b from-slate-900 to-slate-950 border border-slate-950 text-white placeholder-zinc-500 rounded-lg px-4 py-3 pr-12 text-sm focus:outline-none focus:border-blue-900 resize-none overflow-hidden"
           />
           <button
             onClick={() => (isLoading ? stopResponse() : handleSend())}
-            disabled={!isLoading && !input.trim()}
+            disabled={(uiLocked && !isLoading) || (!isLoading && !input.trim())}
             className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {isLoading ? (

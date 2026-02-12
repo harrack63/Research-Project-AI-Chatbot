@@ -1,40 +1,77 @@
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import type { Message } from '~/lib/types';
-import rehypeHighlight from 'rehype-highlight';
-import { Check, Copy, Terminal } from 'lucide-react';
-import { useState } from 'react';
+// src/app/chat/components/chat/ChatMessage.tsx
+"use client";
+
+import React, { memo, useCallback, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import type { Message } from "~/lib/types";
+import rehypeHighlight from "rehype-highlight";
+import { Check, Copy, Pencil, RotateCcw, Terminal, X } from "lucide-react";
 
 type ChatMessageProps = {
   message: Message;
+  onCopy?: (text: string) => void | Promise<void>;
+  onRetry?: () => void | Promise<void>;
+  onEdit?: (newText: string) => void | Promise<void>;
+  uiLocked?: boolean;
 };
 
-export default function ChatMessage({ message }: ChatMessageProps) {
-  const isUser = message.role === 'user';
-
-  if (message.role === 'assistant') {
-    console.log("Raw Model Output:", JSON.stringify(message.content));
-  }
+const ChatMessage = memo(function ChatMessage({
+  message,
+  onCopy,
+  onRetry,
+  onEdit,
+  uiLocked = false,
+}: ChatMessageProps) {
+  const isUser = message.role === "user";
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState(message.content);
+  const [busy, setBusy] = useState(false);
 
   if (isUser) {
     return (
-      <div className="flex justify-end w-full">
-        <div className="bg-blue-600 rounded-lg px-4 py-2 max-w-lg">
-          <p className="text-sm whitespace-pre-wrap wrap-break-word leading-relaxed" style={{ color: '#ffffffcc' }}>
-            {message.content}
-          </p>
-        </div>
-      </div>
+      <UserBubble
+        message={message}
+        onCopy={onCopy}
+        onEdit={onEdit}
+        uiLocked={uiLocked}
+        isEditing={isEditing}
+        setIsEditing={setIsEditing}
+        draft={draft}
+        setDraft={setDraft}
+        busy={busy}
+        setBusy={setBusy}
+      />
     );
   }
 
   // Assistant message
   return (
-    <div className="flex justify-start w-full 
+    <div
+      className="flex justify-start w-full relative group
       prose-th:border prose-th:border-slate-700 prose-th:p-2 prose-th:bg-slate-800 
-      prose-td:border prose-td:border-slate-700 prose-td:p-2">
+      prose-td:border prose-td:border-slate-700 prose-td:p-2"
+    >
+      {/* Assistant actions (Retry lives here) */}
+      {onRetry && (
+        <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-700 rounded-md px-1.5 py-1 shadow">
+            <button
+              type="button"
+              onClick={onRetry}
+              disabled={uiLocked}
+              className="p-1 rounded hover:bg-slate-800 text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Retry"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* prose-invert makes it dark-mode compatible, prose-sm sizes it correctly */}
-      <div className="prose prose-invert prose-sm max-w-none leading-7 text-slate-200
+      <div
+        className="prose prose-invert prose-sm max-w-none leading-7 text-slate-200
         prose-headings:font-bold prose-headings:text-blue-300 prose-headings:mb-2 prose-headings:mt-6
         prose-a:text-blue-400 prose-a:no-underline hover:prose-a:underline
         prose-code:text-blue-200 prose-code:bg-slate-800 prose-code:rounded prose-code:px-1 prose-code:py-0.5 prose-code:before:content-none prose-code:after:content-none
@@ -42,53 +79,47 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         prose-blockquote:border-l-4 prose-blockquote:border-blue-500 prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-slate-400
         [&>ul]:list-disc [&>ul]:list-outside [&>ul]:pl-5 [&>ul]:my-2
         [&>ol]:list-decimal [&>ol]:list-outside [&>ol]:pl-5 [&>ol]:my-2
-        [&>li]:my-1 prose-hr:my-8 prose-hr:border-slate-700">
+        [&>li]:my-1 prose-hr:my-8 prose-hr:border-slate-700"
+      >
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}
           components={{
-            // Custom renderer to attach the cursor to the very last text node
-            p: ({ children }) => (
-              <p className="mb-2 last:mb-0">
-                {children}
-              </p>
-            ),
+            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
             pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
             hr: () => <hr className="my-4 border-t border-slate-700" />,
             table: ({ children }) => (
-                <div className="my-6 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-900/50">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-slate-700">
-                      {children}
-                    </table>
-                  </div>
+              <div className="my-6 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-900/50">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-slate-700">
+                    {children}
+                  </table>
                 </div>
-              ),
-              thead: ({ children }) => (
-                <thead className="bg-slate-800/80">
-                  {children}
-                </thead>
-              ),
-              tbody: ({ children }) => (
-                <tbody className="divide-y divide-slate-700 bg-transparent">
-                  {children}
-                </tbody>
-              ),
-              tr: ({ children }) => (
-                <tr className="transition-colors hover:bg-slate-800/50">
-                  {children}
-                </tr>
-              ),
-              th: ({ children }) => (
-                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider border-r border-slate-700 last:border-r-0">
-                  {children}
-                </th>
-              ),
-              td: ({ children }) => (
-                <td className="px-4 py-3 text-sm text-slate-300 border-r border-slate-700 last:border-r-0 align-top">
-                  {children}
-                </td>
-              )
+              </div>
+            ),
+            thead: ({ children }) => (
+              <thead className="bg-slate-800/80">{children}</thead>
+            ),
+            tbody: ({ children }) => (
+              <tbody className="divide-y divide-slate-700 bg-transparent">
+                {children}
+              </tbody>
+            ),
+            tr: ({ children }) => (
+              <tr className="transition-colors hover:bg-slate-800/50">
+                {children}
+              </tr>
+            ),
+            th: ({ children }) => (
+              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider border-r border-slate-700 last:border-r-0">
+                {children}
+              </th>
+            ),
+            td: ({ children }) => (
+              <td className="px-4 py-3 text-sm text-slate-300 border-r border-slate-700 last:border-r-0 align-top">
+                {children}
+              </td>
+            ),
           }}
         >
           {message.content || ""}
@@ -96,23 +127,169 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       </div>
     </div>
   );
+});
+
+type UserBubbleProps = {
+  message: Message;
+  onCopy?: (text: string) => void | Promise<void>;
+  onEdit?: (newText: string) => void | Promise<void>;
+  uiLocked: boolean;
+
+  isEditing: boolean;
+  setIsEditing: (v: boolean) => void;
+  draft: string;
+  setDraft: (v: string) => void;
+  busy: boolean;
+  setBusy: (v: boolean) => void;
+};
+
+function UserBubble({
+  message,
+  onCopy,
+  onEdit,
+  uiLocked,
+  isEditing,
+  setIsEditing,
+  draft,
+  setDraft,
+  busy,
+  setBusy,
+}: UserBubbleProps) {
+  const doCopy = useCallback(() => {
+    onCopy?.(message.content);
+  }, [message.content, onCopy]);
+
+  const startEdit = useCallback(() => {
+    if (!onEdit) return;
+    setDraft(message.content);
+    setIsEditing(true);
+  }, [message.content, onEdit, setDraft, setIsEditing]);
+
+  const cancelEdit = useCallback(() => {
+    setIsEditing(false);
+    setDraft(message.content);
+  }, [message.content, setDraft, setIsEditing]);
+
+  const saveEdit = useCallback(async () => {
+    if (!onEdit) return;
+    const next = draft.trim();
+    if (!next) return;
+    setBusy(true);
+    try {
+      await onEdit(next);
+      setIsEditing(false);
+    } finally {
+      setBusy(false);
+    }
+  }, [draft, onEdit, setBusy, setIsEditing]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancelEdit();
+        return;
+      }
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        saveEdit();
+      }
+    },
+    [cancelEdit, saveEdit]
+  );
+
+  return (
+    <div className="flex justify-end w-full group">
+      <div className="relative bg-blue-600 rounded-lg px-4 py-2 max-w-lg w-full sm:w-auto">
+        {/* Actions */}
+        <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 bg-slate-900/80 border border-slate-700 rounded-md px-1.5 py-1 shadow">
+            <button
+              type="button"
+              onClick={doCopy}
+              disabled={uiLocked || isEditing || busy}
+              className="p-1 rounded hover:bg-slate-800 text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Copy message"
+            >
+              <Copy className="w-3.5 h-3.5" />
+            </button>
+
+            {onEdit && (
+              <button
+                type="button"
+                onClick={startEdit}
+                disabled={uiLocked || busy}
+                className="p-1 rounded hover:bg-slate-800 text-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Edit message"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {!isEditing ? (
+          <p
+            className="text-sm whitespace-pre-wrap wrap-break-word leading-relaxed"
+            style={{ color: "#ffffffcc" }}
+          >
+            {message.content}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={3}
+              disabled={busy}
+              className="w-full bg-blue-700/40 border border-blue-300/30 rounded-md p-2 text-sm text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-white/30 resize-none"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                disabled={busy}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-slate-900/40 border border-slate-700 text-slate-200 hover:bg-slate-900/60 disabled:opacity-50"
+                title="Cancel (Esc)"
+              >
+                <X className="w-3.5 h-3.5" />
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveEdit}
+                disabled={busy || !draft.trim()}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50"
+                title="Save (Enter)"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Save
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function CodeBlock({ children }: { children: React.ReactNode }) {
-  // Extract the language from the code element's className if possible
   let language = "text";
   let codeContent = "";
 
-  if (children && typeof children === "object" && "props" in children) {
-    const childProps = (children as any).props;
-    // rehype-highlight usually adds 'hljs language-xyz'
-    const className = childProps.className || "";
+  if (React.isValidElement(children)) {
+    const childProps = children.props as {
+      className?: string;
+      children?: React.ReactNode;
+    };
+    const className = (childProps.className as string) || "";
     const match = /language-(\w+)/.exec(className);
     if (match) {
       language = match[1];
     }
-    // Get raw text content for the copy button
-    codeContent = String(childProps.children).replace(/\n$/, "");
+    const raw = childProps.children ?? "";
+    codeContent = String(raw).replace(/\n$/, "");
   }
 
   return (
@@ -120,18 +297,17 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
       {/* Header Bar */}
       <div className="flex items-center justify-between px-3 py-2 bg-slate-800/80 border-b border-slate-700 backdrop-blur-sm">
         <div className="flex items-center gap-2">
-           {/* Tiny icon based on logic could go here, defaulting to Terminal */}
-           <Terminal className="w-3.5 h-3.5 text-slate-400" />
-           <span className="text-xs font-medium text-slate-400 uppercase tracking-wider font-mono">
-             {language}
-           </span>
+          <Terminal className="w-3.5 h-3.5 text-slate-400" />
+          <span className="text-xs font-medium text-slate-400 uppercase tracking-wider font-mono">
+            {language}
+          </span>
         </div>
         <CopyButton content={codeContent} />
       </div>
-      
+
       {/* Code Area */}
       <div className="p-4 overflow-x-auto">
-        <pre className="!bg-transparent !p-0 !m-0 !border-0 font-mono text-sm leading-relaxed">
+        <pre className="bg-transparent! p-0! m-0! border-0! font-mono text-sm leading-relaxed">
           {children}
         </pre>
       </div>
@@ -142,11 +318,11 @@ function CodeBlock({ children }: { children: React.ReactNode }) {
 function CopyButton({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
+  const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [content]);
 
   return (
     <button
@@ -162,3 +338,5 @@ function CopyButton({ content }: { content: string }) {
     </button>
   );
 }
+
+export default ChatMessage;

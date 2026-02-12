@@ -1,26 +1,31 @@
+// src/app/components/Navbar.tsx
 "use client";
 
-import { useAuthStatus } from "~/app/useAuth";
-import { UserButton } from "@clerk/nextjs";
+import { useAuth } from "~/lib/auth";
 import Link from "next/link";
 
 export default function Navbar() {
-  const { isAuthenticated, isLoaded, user } = useAuthStatus();
+  const { isSignedIn, isLoaded, user, signOut } = useAuth();
 
   return (
     <nav className="w-full bg-white/95 backdrop-blur-sm border-b border-gray-200 px-6 py-4 flex justify-between items-center">
       <div className="flex items-center space-x-2">
-        <h1 className="text-xl font-semibold text-gray-800">
-          PersonalizedChatbot
-        </h1>
+        <h1 className="text-xl font-semibold text-gray-800">HealthBot</h1>
       </div>
       <div className="flex items-center space-x-4">
         {!isLoaded ? (
           <div className="px-4 py-2 text-gray-600">Loading...</div>
-        ) : isAuthenticated && user ? (
+        ) : isSignedIn && user ? (
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-700">Welcome, {user.username}!</span>
-            <UserButton afterSignOutUrl="/sign-in" />
+            <span className="text-sm text-gray-700">
+              Welcome, {user.name?.split(" ")[0]}!
+            </span>
+            <button
+              onClick={signOut}
+              className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Sign Out
+            </button>
           </div>
         ) : (
           <div className="space-x-2">

@@ -2,7 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "~/lib/auth";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import type { ChatCategory } from "~/lib/types";
 import { getGlobalChats, setGlobalChats, loadChats, deleteChat } from "~/lib/chatStore";
@@ -10,9 +10,10 @@ import CollapsedSidebar from "./collapsedSidebar";
 import SearchModal from "./searchModel";
 import CategorySection from "./categorySection";
 import DeleteModal from "./deleteModel";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import { basePath } from "~/lib/global_vars";
 
 type SidebarLeftProps = {
   isOpen: boolean;
@@ -48,10 +49,10 @@ function initializePinnedIds(chats: ChatCategory[]): Set<string> {
 }
 
 export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
-  const params = useParams();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const { user } = useUser();
-  const activeChatId = params?.id as string | null;
+  const { user } = useAuth();
+  const activeChatId = searchParams.get("id") ?? "";
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<
     Record<string, boolean>
@@ -89,6 +90,10 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
 
     window.addEventListener("chats-updated", handleChatsUpdate);
     return () => window.removeEventListener("chats-updated", handleChatsUpdate);
+  }, []);
+
+  useEffect(() => {
+    setIsLoaded(true);
   }, []);
 
   const stableToggle = useCallback(() => {
@@ -225,13 +230,16 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   };
 
   const userInitials =
-    user && user.firstName && user.lastName
-      ? `${user.firstName[0]}${user.lastName[0]}`.toUpperCase()
-      : user?.firstName
-        ? user.firstName[0].toUpperCase()
-        : "U";
+    user?.name
+      ? user.name
+          .split(" ")
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2)
+      : "U";
 
-  const userName = user?.firstName || "User";
+  const userName = user?.name || "User";
 
   if (!isOpen) {
     return (
@@ -256,7 +264,7 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
         <div className="p-3 border-b border-slate-800 flex items-center justify-between gap-2 mt-1 ml-1">
           <div className="flex-1 flex items-center gap-2 justify-center">
             <Image
-              src="/favicon.png"
+              src={`${basePath}/favicon.ico`}
               alt="Healthbot"
               width={24}
               height={24}

@@ -1,8 +1,15 @@
 .DS_Store
 out/
+dist/
+.astro/
+.github/
 
+
+.astro/
+.github/
 .env.local
 .env
+.cursorignore
 
 # dependencies
 /node_modules

@@ -1,0 +1,17 @@
+node_modules/
+.astro/
+.cursor/
+.github/
+.vscode/
+.cursorignore
+.cursorrules
+.cursorignore
+.cursorrules
+.next/
+out/
+dist/
+build/
+coverage/
+**/*.log
+.env
+.git/

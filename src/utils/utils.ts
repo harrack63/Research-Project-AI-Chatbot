@@ -1,6 +1,14 @@
 // utils/utils.ts
 import type { ChatImage, Message } from "~/lib/types";
-import { API_BASE, API_ROUTES } from "~/lib/api";
+import { API_ROUTES } from "~/lib/api";
+import { getAuthToken } from "~/lib/auth";
+
+type UploadIngestResponse = {
+  ok: boolean;
+  chunks_indexed?: number;
+  token_count?: number;
+  detail?: string;
+};
 
 export async function sendChatMessageStream(
   messages: Message[],
@@ -9,12 +17,15 @@ export async function sendChatMessageStream(
   onImages?: (images: ChatImage[]) => void,
   signal?: AbortSignal
 ): Promise<void> {
+  const token = getAuthToken();
+  
   const response = await fetch(API_ROUTES.chatStream, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
       "Cache-Control": "no-cache",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ messages, userId }),
     signal,
@@ -61,4 +72,34 @@ export async function sendChatMessageStream(
       }
     }
   }
+}
+
+export async function ingestUploadedDocument(
+  fileUrl: string,
+  fileName: string,
+  fileType: string,
+  userId: string
+): Promise<UploadIngestResponse> {
+  const token = getAuthToken();
+
+  const response = await fetch(API_ROUTES.uploadIngest, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      file_url: fileUrl,
+      file_name: fileName,
+      file_type: fileType,
+      user_id: userId,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    return { ok: false, detail: error.detail || "Upload ingestion failed" };
+  }
+
+  return response.json();
 }

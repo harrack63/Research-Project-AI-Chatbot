@@ -1,31 +1,49 @@
-// app/page.tsx
+// src/app/page.tsx
 "use client";
 
-import { useAuthStatus } from "~/app/useAuth";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useAuth } from "~/lib/auth";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 
-const base = process.env.NEXT_PUBLIC_CLERK_BASE_PATH;
-
-export default function HomePage() {
-  const { isAuthenticated, isLoaded } = useAuthStatus();
+function HomeContent() {
+  const { isSignedIn, isLoaded } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const route = searchParams.get("route");
 
   useEffect(() => {
-    if (isLoaded) {
-      console.log("Auth: ", isAuthenticated);
-      console.log("IsLoaded", isLoaded)
-      if (!isAuthenticated) {
-        router.replace(`${base}/sign-in`);
-      } else {
-        router.replace(`${base}/chat`);
-      }
+    if (!isLoaded) return;
+
+    if (route) {
+      router.replace(route);
+      return;
     }
-  }, [isLoaded, isAuthenticated, router]);
+
+    if (isSignedIn) {
+      router.replace("/chat");
+    } else {
+      router.replace("/sign-in");
+    }
+  }, [isLoaded, isSignedIn, router, route]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-linear-to-br from-blue-900 to-blue-950">
-      <div className="text-white">Loading...</div>
+      <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen bg-linear-to-br from-blue-900 to-blue-950">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+        </div>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }
