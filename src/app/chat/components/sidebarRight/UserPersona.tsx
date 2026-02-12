@@ -548,35 +548,22 @@ export default function UserPersona() {
           onToggle={() => setSections((s) => ({ ...s, healthStatus: !s.healthStatus }))}
         >
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-slate-300">History Hypertension</label>
-              <button
-                onClick={() => updatePersona("history_hypertension", !persona.history_hypertension)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  persona.history_hypertension ? "bg-green-500" : "bg-slate-700"
-                }`}
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Diabetes Status</label>
+              <select
+                value={persona.diabetes_status || "healthy"}
+                onChange={(e) =>
+                  updatePersona(
+                    "diabetes_status",
+                    (e.target.value as "healthy" | "pre-diabetes" | "diabetes") || "healthy"
+                  )
+                }
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-sm"
               >
-                <div
-                  className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                    persona.history_hypertension ? "translate-x-6" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
-            </div>
-            <div className="flex items-center justify-between">
-              <label className="text-sm text-slate-300">History Gestational Diabetes</label>
-              <button
-                onClick={() => updatePersona("history_gestational_diabetes", !persona.history_gestational_diabetes)}
-                className={`w-12 h-6 rounded-full transition-colors ${
-                  persona.history_gestational_diabetes ? "bg-green-500" : "bg-slate-700"
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                    persona.history_gestational_diabetes ? "translate-x-6" : "translate-x-0.5"
-                  }`}
-                />
-              </button>
+                <option value="healthy">Healthy</option>
+                <option value="pre-diabetes">Pre-diabetes</option>
+                <option value="diabetes">Diabetes</option>
+              </select>
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Physical Activity Level</label>
@@ -591,23 +578,6 @@ export default function UserPersona() {
                       className="w-4 h-4"
                     />
                     {level.charAt(0).toUpperCase() + level.slice(1)}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Perceived Diabetes Risk</label>
-              <div className="flex gap-4">
-                {(["high", "low"] as const).map((risk) => (
-                  <label key={risk} className="flex items-center gap-2 text-sm text-slate-300">
-                    <input
-                      type="radio"
-                      name="diabetes_risk"
-                      checked={persona.perceived_diabetes_risk === risk}
-                      onChange={() => updatePersona("perceived_diabetes_risk", risk)}
-                      className="w-4 h-4"
-                    />
-                    {risk.charAt(0).toUpperCase() + risk.slice(1)}
                   </label>
                 ))}
               </div>
