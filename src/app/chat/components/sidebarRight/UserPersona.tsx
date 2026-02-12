@@ -9,71 +9,7 @@ import {
   getCachedPreferences,
   setCachedPreferences,
 } from "~/lib/userPreferencesStore";
-
-type PersonaState = {
-  // Demographics
-  age?: number | null;
-  sex_at_birth?: "male" | "female" | "other" | null;
-  race?: string | null;
-  culture?: string | null;
-  marital_status?: string | null;
-
-  // Body Measurements
-  weight_kg?: number | null;
-  height_cm?: number | null;
-  waist_circumference_cm?: number | null;
-  BMI?: number | null;
-
-  // Lab Test Results
-  total_cholesterol_mg_dl?: number | null;
-  triglyceride_mg_dl?: number | null;
-  HbA1c_percent?: number | null;
-  glucose_plasma_mg_dl?: number | null;
-  blood_pressure_systolic?: number | null;
-  blood_pressure_diastolic?: number | null;
-  LDL_mg_dl?: number | null;
-  insulin_status?: boolean | null;
-  BUN_mg_dl?: number | null;
-  uric_acid_mg_dl?: number | null;
-  creatinine_mg_dl?: number | null;
-
-  // Medication Usage
-  on_lipid_med?: boolean | null;
-  on_diabetic_medication?: "insulin" | "oral" | "none" | null;
-  on_bp_medication?: boolean | null;
-  medication_usage?: string[] | null;
-
-  // Chronic Conditions
-  chronic_conditions?: string[] | null;
-  diabetes_status?: "healthy" | "pre-diabetes" | "diabetes";
-
-  // Health Status
-  history_hypertension?: boolean | null;
-  history_gestational_diabetes?: boolean | null;
-  physical_activity_level?: "low" | "moderate" | "high" | null;
-  perceived_diabetes_risk?: string | null;
-
-  // Family History
-  family_history_diabetes?: boolean | null;
-
-  // Health Behavior
-  tobacco_use?: boolean | null;
-  tobacco_use_details?: string | null;
-  tabacco_pack_years?: number | null;
-  alcohol_consumption?: string | null;
-  sleep_hours?: number | null;
-  diet_score?: number | null;
-
-  // Social Determinants
-  income_status?: string | null;
-  education?: string | null;
-
-  // Healthcare Access
-  insurance_type?: "none" | "government" | "medicaid" | "private" | null;
-  has_healthcare_access?: boolean | null;
-
-  goals?: string | null;
-};
+import type { PersonaState } from "~/lib/types";
 
 const emptyPersona: PersonaState = {
   age: null,
@@ -102,22 +38,22 @@ const emptyPersona: PersonaState = {
   medication_usage: [],
   chronic_conditions: [],
   diabetes_status: "healthy",
-  history_hypertension: null,
-  history_gestational_diabetes: null,
   physical_activity_level: null,
-  perceived_diabetes_risk: null,
-  family_history_diabetes: null,
+  history_of_conditions: [],
+  family_history_of_conditions: [],
   tobacco_use: null,
   tobacco_use_details: null,
   tabacco_pack_years: null,
   alcohol_consumption: null,
   sleep_hours: null,
   diet_score: null,
+  dietary_restrictions: [],
   income_status: null,
   education: null,
   insurance_type: null,
   has_healthcare_access: null,
   goals: null,
+  other_notes: null,
 };
 
 const fetchedUserIds = new Set<string>();
@@ -189,7 +125,10 @@ export default function UserPersona() {
       if (!silent) setLoading(true);
       const result = await fetchUserPreferences();
       if (result.ok && result.preferences) {
-        const nextPersona = result.preferences.persona || emptyPersona;
+        const nextPersona = {
+          ...emptyPersona,
+          ...(result.preferences.persona || {}),
+        };
         const nextGoals = result.preferences.goals || "";
         const nextUpdatedAtRaw = result.preferences.updated_at;
         const nextUpdatedAtMs = nextUpdatedAtRaw
@@ -263,21 +202,6 @@ export default function UserPersona() {
     setPersona((prev) => ({
       ...prev,
       chronic_conditions: (prev.chronic_conditions || []).filter((_, i) => i !== index),
-    }));
-  };
-
-  const addMedication = (medication: string) => {
-    if (!medication.trim()) return;
-    setPersona((prev) => ({
-      ...prev,
-      medication_usage: [...(prev.medication_usage || []), medication.trim()],
-    }));
-  };
-
-  const removeMedication = (index: number) => {
-    setPersona((prev) => ({
-      ...prev,
-      medication_usage: (prev.medication_usage || []).filter((_, i) => i !== index),
     }));
   };
 
@@ -689,7 +613,7 @@ export default function UserPersona() {
             <textarea
               value={goals}
               onChange={(e) => setGoals(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-sm min-h-[100px]"
+              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-sm min-h-25"
               placeholder="Enter your health goals..."
             />
             <Star className="absolute right-3 top-3 w-4 h-4 text-yellow-400" />

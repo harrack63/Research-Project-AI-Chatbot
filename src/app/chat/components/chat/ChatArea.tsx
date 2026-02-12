@@ -219,7 +219,7 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
         <div className="flex gap-3 max-w-2xl mx-auto relative">
           <div className="flex items-end">
             <UploadButton
-              endpoint="documentUploader"
+              endpoint={(routeRegistry) => routeRegistry.documentUploader}
               disabled={isUploading || !userId}
               onBeforeUploadBegin={(files) => {
                 const allowedExtensions = [".pdf", ".docx", ".txt"];
