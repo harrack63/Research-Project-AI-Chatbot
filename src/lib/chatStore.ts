@@ -120,6 +120,21 @@ export async function syncChatsWithServer(): Promise<void> {
   }
 }
 
+export async function backendChatsAreNewerThanLocal(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+
+  const localUpdatedAtMs = getLocalUpdatedAtMs();
+  const res = await fetchChats();
+  if (!res.ok) return false;
+
+  const serverHasChats = Array.isArray(res.chats) && res.chats.length > 0;
+  if (!serverHasChats) return false;
+
+  const serverUpdatedAtMs = res.updated_at ? Date.parse(res.updated_at) : 0;
+  const safeServerUpdatedAtMs = Number.isNaN(serverUpdatedAtMs) ? 0 : serverUpdatedAtMs;
+  return safeServerUpdatedAtMs > localUpdatedAtMs;
+}
+
 export function getGlobalChats(): ChatCategory[] {
   if (globalChats.length === 0) {
     loadChats();

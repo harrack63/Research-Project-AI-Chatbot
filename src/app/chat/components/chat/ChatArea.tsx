@@ -122,7 +122,7 @@ export default function ChatArea({ chatId }: { chatId?: string }) {
 
   return (
     <div className="flex-1 flex flex-col relative bg-linear-to-b bg-slate-800 overflow-hidden">
-      <Toaster position="bottom-right" theme="dark" richColors />
+      <Toaster position="top-right" theme="dark" richColors />
       {/* Scroll container */}
       <div
         ref={scrollContainerRef}

@@ -30,7 +30,7 @@ export const API_ROUTES = {
   logout: `${API_BASE}/auth/logout`,
 };
 
-export async function fetchUserPreferences(): Promise<{ ok: boolean; preferences?: any; error?: string }> {
+export async function fetchUserPreferences(): Promise<{ ok: boolean; preferences?: { persona?: any; goals?: string | null; updated_at?: string | null } | any; error?: string }> {
   const token = typeof window !== "undefined" ? localStorage.getItem("healthbot_token") : null;
   if (!token) {
     return { ok: false, error: "Not authenticated" };
@@ -52,7 +52,7 @@ export async function fetchUserPreferences(): Promise<{ ok: boolean; preferences
   return await res.json();
 }
 
-export async function saveUserPreferences(preferences: { persona: any; goals?: string | null }): Promise<{ ok: boolean; message?: string; error?: string }> {
+export async function saveUserPreferences(preferences: { persona: any; goals?: string | null }): Promise<{ ok: boolean; message?: string; updated_at?: string | null; error?: string }> {
   const token = typeof window !== "undefined" ? localStorage.getItem("healthbot_token") : null;
   if (!token) {
     return { ok: false, error: "Not authenticated" };

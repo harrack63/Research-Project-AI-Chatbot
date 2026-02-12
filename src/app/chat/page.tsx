@@ -1,19 +1,33 @@
 // src/app/chat/page.tsx
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import SidebarLeft from "~/app/chat/components/sidebarLeft/SidebarLeft";
 import SidebarRight from "~/app/chat/components/sidebarRight/SidebarRight";
 import ChatArea from "~/app/chat/components/chat/ChatArea";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
-import { chatHasMessages, createNewChat, getGlobalChats, loadChats, syncChatsWithServer } from "~/lib/chatStore";
+import { useAuth } from "~/lib/auth";
+import {
+  backendChatsAreNewerThanLocal,
+  chatHasMessages,
+  createNewChat,
+  getGlobalChats,
+  loadChats,
+  syncChatsWithServer,
+} from "~/lib/chatStore";
 import type { Message } from "~/lib/types";
 
 import { Loader2 } from "lucide-react";
 import AuthGate from "~/app/components/AuthGate";
+import { toast } from "sonner";
+import { fetchUserPreferences } from "~/lib/api";
+import { getCachedPreferencesUpdatedAtMs } from "~/lib/userPreferencesStore";
 
 function ChatContent() {
+  const outOfSyncToastShownRef = useRef(false);
+  const { user } = useAuth();
+
   const recoverChatFromMessages = useCallback((missingChatId: string) => {
     try {
       const stored = localStorage.getItem(`healthbot_messages_${missingChatId}`);
@@ -101,20 +115,42 @@ function ChatContent() {
 
   // Validate chat exists
   useEffect(() => {
-    if (!chatId) return;
+    if (!chatsLoaded || !user?.id) return;
     if (!chatsLoaded && !chatHasMessages(chatId)) return;
     loadChats();
     const chats = getGlobalChats();
+    const backendPreferencesAreNewerThanLocal = async () => {
+      const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(user.id);
+      const res = await fetchUserPreferences();
+      if (!res.ok || !res.preferences) return false;
+
+      const backendUpdatedAtRaw = res.preferences.updated_at;
+      const backendUpdatedAtMs = backendUpdatedAtRaw
+        ? Date.parse(String(backendUpdatedAtRaw))
+        : 0;
+      const safeBackendUpdatedAtMs = Number.isNaN(backendUpdatedAtMs)
+        ? 0
+        : backendUpdatedAtMs;
+
+      return safeBackendUpdatedAtMs > localUpdatedAtMs;
+    };
+
     const chatExists = chats
       .flatMap((c) => c.chats)
       .some((c) => c.id === chatId);
+      const [chatsNewer, prefsNewer] = await Promise.all([
+        backendChatsAreNewerThanLocal(),
+        backendPreferencesAreNewerThanLocal(),
+      ]);
 
-    if (!chatExists) {
+      if ((!chatsNewer && !prefsNewer) || cancelled || outOfSyncToastShownRef.current) {
+        return;
+      }
       const recovered = recoverChatFromMessages(chatId);
       if (!recovered) {
         router.replace(`/chat`);
       }
-    }
+        description: "Newer backend data was found. Refresh to sync chats and sidebar data.",
   }, [chatId, chatsLoaded, recoverChatFromMessages, router]);
 
   // Load chats
@@ -124,6 +160,45 @@ function ChatContent() {
       setChatsLoaded(true);
     });
   }, []);
+
+  useEffect(() => {
+    if (!chatsLoaded) return;
+
+    let cancelled = false;
+
+    const checkBackendUpdates = async () => {
+      if (cancelled || outOfSyncToastShownRef.current) return;
+
+      const backendIsNewer = await backendChatsAreNewerThanLocal();
+      if (!backendIsNewer || cancelled || outOfSyncToastShownRef.current) return;
+
+      outOfSyncToastShownRef.current = true;
+
+      toast("Your chats are out of date", {
+        id: "backend-out-of-sync",
+        description: "Newer chats were found on the backend.",
+        duration: Infinity,
+        action: {
+          label: "Refresh",
+          onClick: () => {
+            void syncChatsWithServer().then(() => {
+              window.location.reload();
+            });
+          },
+        },
+      });
+    };
+
+    void checkBackendUpdates();
+    const intervalId = window.setInterval(() => {
+      void checkBackendUpdates();
+    }, 45000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [chatsLoaded, user?.id]);
 
   return (
     <div className="flex min-h-screen bg-blue-950">

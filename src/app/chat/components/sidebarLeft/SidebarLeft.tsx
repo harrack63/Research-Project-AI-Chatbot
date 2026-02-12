@@ -92,6 +92,10 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
     return () => window.removeEventListener("chats-updated", handleChatsUpdate);
   }, []);
 
+  useEffect(() => {
+    setIsLoaded(true);
+  }, []);
+
   const stableToggle = useCallback(() => {
     onToggle();
   }, [onToggle]);

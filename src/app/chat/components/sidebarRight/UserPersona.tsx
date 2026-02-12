@@ -191,13 +191,17 @@ export default function UserPersona() {
       if (result.ok && result.preferences) {
         const nextPersona = result.preferences.persona || emptyPersona;
         const nextGoals = result.preferences.goals || "";
+        const nextUpdatedAtRaw = result.preferences.updated_at;
+        const nextUpdatedAtMs = nextUpdatedAtRaw
+          ? Date.parse(String(nextUpdatedAtRaw))
+          : Date.now();
         setPersona(nextPersona);
         setGoals(nextGoals);
         setCachedPreferences({
           userId,
           persona: nextPersona,
           goals: nextGoals,
-          updatedAt: Date.now(),
+          updatedAt: Number.isNaN(nextUpdatedAtMs) ? Date.now() : nextUpdatedAtMs,
         });
       }
     } catch (error) {
@@ -213,11 +217,14 @@ export default function UserPersona() {
       const result = await saveUserPreferences({ persona, goals: goals || null });
       if (result.ok) {
         if (user?.id) {
+          const responseUpdatedAtMs = (result as any)?.updated_at
+            ? Date.parse(String((result as any).updated_at))
+            : Date.now();
           setCachedPreferences({
             userId: user.id,
             persona,
             goals: goals || null,
-            updatedAt: Date.now(),
+            updatedAt: Number.isNaN(responseUpdatedAtMs) ? Date.now() : responseUpdatedAtMs,
           });
         }
         // Show success feedback

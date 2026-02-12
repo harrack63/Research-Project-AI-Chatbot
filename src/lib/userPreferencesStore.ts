@@ -40,6 +40,12 @@ export function getCachedPreferences(userId: string): CachedPreferences | null {
   return cache[userId] ?? null;
 }
 
+export function getCachedPreferencesUpdatedAtMs(userId: string): number {
+  const cached = getCachedPreferences(userId);
+  if (!cached?.updatedAt) return 0;
+  return Number.isFinite(cached.updatedAt) ? cached.updatedAt : 0;
+}
+
 export function setCachedPreferences(next: CachedPreferences) {
   const cache = readCache();
   cache[next.userId] = next;
