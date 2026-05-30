@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, X, Star } from "lucide-react";
 import { fetchUserPreferences, saveUserPreferences } from "~/lib/api";
 import { useAuth } from "~/lib/auth";
@@ -104,23 +104,7 @@ export default function UserPersona() {
     goals: true,
   });
 
-  useEffect(() => {
-    if (!user?.id) return;
-    const cached = getCachedPreferences(user.id);
-    if (cached?.persona) {
-      setPersona(cached.persona as PersonaState);
-      setGoals(cached.goals || "");
-      setLoading(false);
-    }
-    if (!fetchedUserIds.has(user.id)) {
-      fetchedUserIds.add(user.id);
-      loadPreferences(user.id, !!cached);
-    } else {
-      setLoading(false);
-    }
-  }, [user?.id]);
-
-  const loadPreferences = async (userId: string, silent = false) => {
+  const loadPreferences = useCallback(async (userId: string, silent = false) => {
     try {
       if (!silent) setLoading(true);
       const result = await fetchUserPreferences();
@@ -148,7 +132,27 @@ export default function UserPersona() {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const timer = window.setTimeout(() => {
+      const cached = getCachedPreferences(user.id);
+      if (cached?.persona) {
+        setPersona(cached.persona as PersonaState);
+        setGoals(cached.goals || "");
+        setLoading(false);
+      }
+      if (!fetchedUserIds.has(user.id)) {
+        fetchedUserIds.add(user.id);
+        void loadPreferences(user.id, !!cached);
+      } else {
+        setLoading(false);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [loadPreferences, user?.id]);
 
   const handleSave = async () => {
     try {

@@ -27,7 +27,8 @@ export const API_ROUTES = {
   uploadIngest: `${API_BASE}/api/uploads/ingest`,
   login: `${API_BASE}/api/auth/login`,
   register: `${API_BASE}/api/auth/register`,
-  logout: `${API_BASE}/auth/logout`,
+  logout: `${API_BASE}/api/auth/logout`,
+  refresh: `${API_BASE}/api/auth/refresh`,
 };
 
 export async function fetchUserPreferences(): Promise<{ ok: boolean; preferences?: { persona?: any; goals?: string | null; updated_at?: string | null } | any; error?: string }> {

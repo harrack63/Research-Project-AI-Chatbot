@@ -5,15 +5,17 @@ const TOKEN_KEY = "healthbot_token";
 const USER_KEY = "healthbot_user";
 
 export interface UserData {
-  id: number;
+  id: string;
   email: string;
-  username: string;
-  created_at: string;
+  name?: string;
+  username?: string;
+  created_at?: string;
 }
 
 interface AuthResponse {
-  access_token: string;
-  token_type: string;
+  token?: string;
+  access_token?: string;
+  token_type?: string;
   user: UserData;
 }
 
@@ -68,7 +70,9 @@ export async function loginUser(credentials: {
   }
 
   const data: AuthResponse = await res.json();
-  setToken(data.access_token);
+  const token = data.token ?? data.access_token;
+  if (!token) throw new Error("Malformed auth response");
+  setToken(token);
   setUserData(data.user);
   return { user: data.user };
 }
@@ -81,7 +85,11 @@ export async function registerUser(credentials: {
   const res = await fetch(API_ROUTES.register, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(credentials),
+    body: JSON.stringify({
+      email: credentials.email,
+      password: credentials.password,
+      name: credentials.username,
+    }),
   });
 
   if (!res.ok) {
@@ -90,7 +98,9 @@ export async function registerUser(credentials: {
   }
 
   const data: AuthResponse = await res.json();
-  setToken(data.access_token);
+  const token = data.token ?? data.access_token;
+  if (!token) throw new Error("Malformed auth response");
+  setToken(token);
   setUserData(data.user);
   return { user: data.user };
 }
@@ -101,8 +111,8 @@ export async function getCurrentUser(): Promise<UserData> {
     throw new Error("Not authenticated");
   }
 
-  const res = await fetch(API_ROUTES.me, {
-    method: "GET",
+  const res = await fetch(API_ROUTES.refresh, {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -114,9 +124,12 @@ export async function getCurrentUser(): Promise<UserData> {
     throw new Error("Session expired");
   }
 
-  const user: UserData = await res.json();
-  setUserData(user);
-  return user;
+  const data: AuthResponse = await res.json();
+  const nextToken = data.token ?? data.access_token;
+  if (!nextToken) throw new Error("Malformed auth response");
+  setToken(nextToken);
+  setUserData(data.user);
+  return data.user;
 }
 
 export async function logoutUser(): Promise<void> {

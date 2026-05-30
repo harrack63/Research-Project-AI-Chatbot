@@ -1,5 +1,4 @@
 import { useRouter } from 'next/navigation';
-import { basePath } from '~/lib/global_vars';
 
 type CollapsedSidebarProps = {
   onToggle: () => void;

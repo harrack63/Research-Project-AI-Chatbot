@@ -1,6 +1,6 @@
 // src/hooks/useChat.ts
 import { useState, useCallback, useEffect, useRef } from "react";
-import type { ChatImage, Message } from "~/lib/types";
+import type { ChatImage, Message, SourceReference } from "~/lib/types";
 import { useRouter } from "next/navigation";
 import { generateUniqueChatId } from "~/lib/chatUtils";
 import { createNewChat } from "~/lib/chatStore";
@@ -127,6 +127,20 @@ export function useChat(userId: string, currentChatId?: string) {
     [schedulePersist, setMessagesWithRef]
   );
 
+  const updateAssistantReferencesById = useCallback(
+    (assistantId: string, references: SourceReference[]) => {
+      setMessagesWithRef((prev) => {
+        const next = prev.map((m) => {
+          if (m.id !== assistantId) return m;
+          return { ...m, references };
+        });
+        return next;
+      });
+      schedulePersist();
+    },
+    [schedulePersist, setMessagesWithRef]
+  );
+
   const processOutgoing = useCallback(
     async (outgoingMessages: Message[], assistantId: string) => {
       if (!userId) return;
@@ -147,6 +161,9 @@ export function useChat(userId: string, currentChatId?: string) {
             if (newImages && newImages.length > 0) {
               setImages((prev) => [...prev, ...newImages]);
             }
+          },
+          (references: SourceReference[]) => {
+            updateAssistantReferencesById(assistantId, references);
           },
           ac.signal
         );
@@ -182,6 +199,7 @@ export function useChat(userId: string, currentChatId?: string) {
       persistIfPossible,
       setMessagesWithRef,
       updateAssistantById,
+      updateAssistantReferencesById,
       userId,
     ]
   );
@@ -215,6 +233,7 @@ export function useChat(userId: string, currentChatId?: string) {
         role: "assistant",
         content: "",
         timestamp: new Date(),
+        references: [],
       };
 
       const next = [...messagesRef.current, userMessage, assistantMessage];
@@ -259,13 +278,18 @@ export function useChat(userId: string, currentChatId?: string) {
       role: "assistant",
       content: "",
       timestamp: new Date(),
+      references: [],
     };
 
     const initial = [userMessage, assistantMessage];
     setMessagesWithRef(initial);
     persistMessages(currentChatId, initial);
 
-    processOutgoing([userMessage], assistantId);
+    const timer = window.setTimeout(() => {
+      void processOutgoing([userMessage], assistantId);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [currentChatId, persistMessages, processOutgoing, setMessagesWithRef, userId]);
 
   // Retry from a specific user message id
@@ -286,6 +310,7 @@ export function useChat(userId: string, currentChatId?: string) {
         role: "assistant",
         content: "",
         timestamp: new Date(),
+        references: [],
       };
 
       const next = [...prefix, assistantMessage];
@@ -324,6 +349,7 @@ export function useChat(userId: string, currentChatId?: string) {
         role: "assistant",
         content: "",
         timestamp: new Date(),
+        references: [],
       };
 
       const next = [...prefix, assistantMessage];

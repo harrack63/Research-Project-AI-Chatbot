@@ -4,9 +4,20 @@
 import React, { memo, useCallback, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Message } from "~/lib/types";
+import type { Message, SourceReference } from "~/lib/types";
 import rehypeHighlight from "rehype-highlight";
-import { Check, Copy, Pencil, RotateCcw, Terminal, X } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  Copy,
+  Database,
+  FileText,
+  MessageSquareText,
+  Pencil,
+  RotateCcw,
+  Terminal,
+  X,
+} from "lucide-react";
 
 type ChatMessageProps = {
   message: Message;
@@ -124,6 +135,7 @@ const ChatMessage = memo(function ChatMessage({
         >
           {message.content || ""}
         </ReactMarkdown>
+        <ReferenceList references={message.references} />
       </div>
     </div>
   );
@@ -142,6 +154,74 @@ type UserBubbleProps = {
   busy: boolean;
   setBusy: (v: boolean) => void;
 };
+
+function referenceLabel(sourceType: string): string {
+  switch (sourceType) {
+    case "chat_history":
+      return "Previous chat";
+    case "medical_kb":
+      return "Medical knowledge base";
+    case "diabetes_recipe":
+      return "Recipe database";
+    case "user_upload":
+      return "Uploaded document";
+    default:
+      return sourceType.replace(/_/g, " ");
+  }
+}
+
+function ReferenceIcon({ sourceType }: { sourceType: string }) {
+  if (sourceType === "chat_history") {
+    return <MessageSquareText className="h-3.5 w-3.5" />;
+  }
+  if (sourceType === "user_upload") {
+    return <FileText className="h-3.5 w-3.5" />;
+  }
+  if (sourceType === "medical_kb" || sourceType === "diabetes_recipe") {
+    return <BookOpen className="h-3.5 w-3.5" />;
+  }
+  return <Database className="h-3.5 w-3.5" />;
+}
+
+function ReferenceList({ references }: { references?: SourceReference[] }) {
+  if (!references?.length) return null;
+
+  return (
+    <div className="not-prose mt-5 border-t border-slate-700/80 pt-3">
+      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase text-slate-400">
+        <BookOpen className="h-3.5 w-3.5" />
+        References
+      </div>
+      <div className="space-y-2">
+        {references.map((reference) => (
+          <div
+            key={`${reference.id}-${reference.title}`}
+            className="rounded-md border border-slate-700 bg-slate-900/45 px-3 py-2"
+          >
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span className="inline-flex items-center gap-1 rounded-sm border border-slate-600 px-1.5 py-0.5 font-mono text-slate-300">
+                {reference.id}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <ReferenceIcon sourceType={reference.source_type} />
+                {referenceLabel(reference.source_type)}
+              </span>
+              {typeof reference.score === "number" && (
+                <span>score {reference.score.toFixed(3)}</span>
+              )}
+            </div>
+            <div className="mt-1 text-sm font-medium text-slate-200 break-words">
+              {reference.title}
+            </div>
+            <p className="mt-1 max-h-24 overflow-hidden text-xs leading-5 text-slate-400 break-words">
+              {reference.snippet}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function UserBubble({
   message,

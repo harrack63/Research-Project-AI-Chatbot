@@ -13,6 +13,15 @@ export type ChatImage = {
   description: string;
 };
 
+export type SourceReference = {
+  id: string;
+  source_type: string;
+  title: string;
+  snippet: string;
+  score?: number | null;
+  metadata?: Record<string, unknown>;
+};
+
 export type ChatCategory = {
   label: string;
   chats: Chat[];
@@ -23,11 +32,13 @@ export type Message = {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  references?: SourceReference[];
 };
 
 export type ChatResponse = {
   messages: Message[];
   images: ChatImage[];
+  references?: SourceReference[];
 };
 
 export type PersonaConditionNote = {

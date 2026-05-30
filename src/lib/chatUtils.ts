@@ -5,10 +5,6 @@ export function generateUniqueChatId(userId: string): string {
   const random = Math.random().toString(36).substring(2, 15);
   const data = `${userId}-${timestamp}-${random}`;
 
-  // Use Web Crypto API instead of Node.js crypto
-  const encoder = new TextEncoder();
-  const dataBuffer = encoder.encode(data);
-
   // Simple hash for browser
   let hash = 0;
   for (let i = 0; i < data.length; i++) {
