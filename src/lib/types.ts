@@ -17,6 +17,7 @@ export type SourceReference = {
   id: string;
   source_type: string;
   title: string;
+  url?: string | null;
   snippet: string;
   score?: number | null;
   metadata?: Record<string, unknown>;
