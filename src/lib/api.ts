@@ -2,19 +2,23 @@
 function resolveApiBase(): string {
   // Explicit override (recommended)
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  console.log('🔍 DEBUG: NEXT_PUBLIC_API_URL =', envUrl);
+  
   if (envUrl && envUrl.trim().length > 0) {
     const cleaned = envUrl.replace(/\/$/, "");
-    // Browsers can't reliably call 0.0.0.0; it's a bind address.
-    return cleaned.replace("://0.0.0.0", "://127.0.0.1");
+    const final = cleaned.replace("://0.0.0.0", "://127.0.0.1");
+    console.log('✅ Using env URL:', final);
+    return final;
   }
 
   // Client-side fallback: use same origin as the page (keeps https://)
   if (typeof window !== "undefined") {
-    // If backend is same domain (different path), set NEXT_PUBLIC_API_URL instead.
+    console.log('⚠️  Using window.location.origin:', window.location.origin);
     return window.location.origin;
   }
 
   // SSR/static build fallback
+  console.log('📡 Using SSR fallback: http://127.0.0.1:8000');
   return "http://127.0.0.1:8000";
 }
 

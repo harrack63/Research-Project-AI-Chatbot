@@ -39,7 +39,7 @@ export default function AuthComponent({
   if (isSignedIn) {
     return (
       <div className="flex items-center space-x-4">
-        ...
+        <span className="text-white">Already signed in</span>
       </div>
     );
   }

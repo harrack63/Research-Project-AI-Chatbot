@@ -19,81 +19,82 @@ const mockUsers = {
 const mockTokens = {};
 
 const server = http.createServer((req, res) => {
-  // Enable CORS
+  console.log(`📡 ${req.method} ${req.url}`);
+  
+  // Set CORS headers FIRST
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Content-Type', 'application/json');
 
+  // Handle preflight
   if (req.method === 'OPTIONS') {
+    console.log('✅ OPTIONS preflight OK');
     res.writeHead(200);
     res.end();
     return;
   }
 
-  // Parse request body
+  // Collect body
   let body = '';
-  req.on('data', (chunk) => {
-    body += chunk;
-  });
-
+  req.on('data', chunk => body += chunk);
   req.on('end', () => {
-    // REGISTER
-    if (req.url === '/api/auth/register' && req.method === 'POST') {
-      try {
-        const data = JSON.parse(body);
-        const token = `token_${Date.now()}`;
-        const user = {
-          id: 2,
-          email: data.email,
-          username: data.name || data.email.split('@')[0],
-          created_at: new Date().toISOString()
-        };
-        mockUsers[data.email] = { ...user, password: data.password };
-        mockTokens[token] = data.email;
+    handleRequest(req, res, body);
+  });
+});
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          access_token: token,
-          token_type: 'Bearer',
-          user: user
-        }));
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ detail: 'Registration failed' }));
+function handleRequest(req, res, body) {
+  try {
+    // LOGIN
+    if (req.url === '/api/auth/login' && req.method === 'POST') {
+      const data = JSON.parse(body);
+      const user = mockUsers[data.email];
+      
+      if (!user || user.password !== data.password) {
+        console.log('❌ Login failed: invalid credentials');
+        res.writeHead(401);
+        res.end(JSON.stringify({ detail: 'Invalid credentials' }));
+        return;
       }
+
+      const token = `token_${Date.now()}`;
+      mockTokens[token] = data.email;
+
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        access_token: token,
+        token_type: 'Bearer',
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          created_at: user.created_at
+        }
+      }));
+      console.log('✅ Login successful:', data.email);
       return;
     }
 
-    // LOGIN
-    if (req.url === '/api/auth/login' && req.method === 'POST') {
-      try {
-        const data = JSON.parse(body);
-        const user = mockUsers[data.email];
-        
-        if (!user || user.password !== data.password) {
-          res.writeHead(401, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ detail: 'Invalid credentials' }));
-          return;
-        }
+    // REGISTER
+    if (req.url === '/api/auth/register' && req.method === 'POST') {
+      const data = JSON.parse(body);
+      const token = `token_${Date.now()}`;
+      const user = {
+        id: 2,
+        email: data.email,
+        username: data.name || data.email.split('@')[0],
+        created_at: new Date().toISOString()
+      };
+      mockUsers[data.email] = { ...user, password: data.password };
+      mockTokens[token] = data.email;
 
-        const token = `token_${Date.now()}`;
-        mockTokens[token] = data.email;
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          access_token: token,
-          token_type: 'Bearer',
-          user: {
-            id: user.id,
-            email: user.email,
-            username: user.username,
-            created_at: user.created_at
-          }
-        }));
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ detail: 'Login failed' }));
-      }
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        access_token: token,
+        token_type: 'Bearer',
+        user: user
+      }));
+      console.log('✅ Registration successful:', data.email);
       return;
     }
 
@@ -103,7 +104,7 @@ const server = http.createServer((req, res) => {
       const token = auth?.replace('Bearer ', '');
       
       if (!token || !mockTokens[token]) {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.writeHead(401);
         res.end(JSON.stringify({ detail: 'Unauthorized' }));
         return;
       }
@@ -111,7 +112,7 @@ const server = http.createServer((req, res) => {
       const email = mockTokens[token];
       const user = mockUsers[email];
 
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.writeHead(200);
       res.end(JSON.stringify({
         id: user.id,
         email: user.email,
@@ -127,29 +128,31 @@ const server = http.createServer((req, res) => {
       const token = auth?.replace('Bearer ', '');
       if (token) delete mockTokens[token];
 
-      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.writeHead(200);
       res.end(JSON.stringify({ message: 'Logged out' }));
       return;
     }
 
-    // CATCH ALL
-    res.writeHead(404, { 'Content-Type': 'application/json' });
+    // NOT FOUND
+    console.log('⚠️  404:', req.url);
+    res.writeHead(404);
     res.end(JSON.stringify({ detail: 'Not found' }));
-  });
-});
+
+  } catch (err) {
+    console.error('❌ Error:', err.message);
+    res.writeHead(500);
+    res.end(JSON.stringify({ detail: 'Server error' }));
+  }
+}
 
 server.listen(PORT, () => {
   console.log(`✅ Mock backend running on http://localhost:${PORT}`);
   console.log(`\nTest credentials:`);
   console.log(`  Email: test@example.com`);
   console.log(`  Password: password123`);
-  console.log(`\nOr create a new account on the frontend`);
 });
 
 server.on('error', (err) => {
   console.error('❌ Server error:', err.message);
-  if (err.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. Try killing the process or use a different port.`);
-  }
   process.exit(1);
 });
