@@ -17,16 +17,16 @@ import {
   syncChatsWithServer,
 } from "~/lib/chatStore";
 import type { Message } from "~/lib/types";
-
 import { Loader2 } from "lucide-react";
 import AuthGate from "~/app/components/AuthGate";
 import { toast } from "sonner";
 import { fetchUserPreferences } from "~/lib/api";
 import { getCachedPreferencesUpdatedAtMs } from "~/lib/userPreferencesStore";
+import { initSessionTimeout } from "~/lib/sessionTimeout";
 
 function ChatContent() {
   const outOfSyncToastShownRef = useRef(false);
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   const recoverChatFromMessages = useCallback((missingChatId: string) => {
     try {
@@ -34,12 +34,8 @@ function ChatContent() {
       if (!stored) return false;
       const parsed = JSON.parse(stored) as Message[];
       if (!Array.isArray(parsed) || parsed.length === 0) return false;
-
       const firstUser = parsed.find((msg) => msg.role === "user");
-      const title =
-        firstUser?.content?.substring(0, 50).split("\n")[0] ||
-        "Recovered Chat";
-
+      const title = firstUser?.content?.substring(0, 50).split("\n")[0] || "Recovered Chat";
       createNewChat(missingChatId, title);
       return true;
     } catch {
@@ -81,15 +77,10 @@ function ChatContent() {
   const toggleRight = () => {
     setShowRight((p) => {
       const newValue = !p;
-      try {
-        localStorage.setItem("sidebarRightOpen", String(newValue));
-      } catch {}
+      try { localStorage.setItem("sidebarRightOpen", String(newValue)); } catch {}
       if (newValue) {
         const availableSpace = window.innerWidth - rightWidth;
-        const minSpaceNeeded = 768;
-        if (availableSpace < minSpaceNeeded) {
-          setShowLeft(false);
-        }
+        if (availableSpace < 768) setShowLeft(false);
       } else {
         setShowLeft(true);
       }
@@ -97,122 +88,114 @@ function ChatContent() {
     });
   };
 
-  const handleRightWidthChange = useCallback(
-    (newWidth: number) => {
-      setRightWidth(newWidth);
-      const mainWidth = window.innerWidth - newWidth;
-      const minSpaceNeeded = 768;
-      if (mainWidth < 768 && showRight) {
-        setShowLeft(false);
-      } else if (mainWidth >= minSpaceNeeded && !showLeft) {
-        setShowLeft(true);
-      }
-    },
-    [showLeft, showRight]
-  );
+  const handleRightWidthChange = useCallback((newWidth: number) => {
+    setRightWidth(newWidth);
+    const mainWidth = window.innerWidth - newWidth;
+    if (mainWidth < 768 && showRight) setShowLeft(false);
+    else if (mainWidth >= 768 && !showLeft) setShowLeft(true);
+  }, [showLeft, showRight]);
 
   useKeyboardShortcut("l", toggleRight);
 
-  // Validate chat exists
   useEffect(() => {
-    if (!chatsLoaded || !user?.id) return;
-    if (!chatsLoaded && !chatHasMessages(chatId)) return;
-    loadChats();
-    const chats = getGlobalChats();
-    const backendPreferencesAreNewerThanLocal = async () => {
-      const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(user.id);
-      const res = await fetchUserPreferences();
-      if (!res.ok || !res.preferences) return false;
+    const cleanup = initSessionTimeout(
+      () => {
+        signOut();
+        toast.error("You have been signed out due to inactivity.");
+      },
+      () => {
+        toast.warning("Your session will expire in 30 seconds due to inactivity.", {
+          id: "session-warn",
+          duration: 30000,
+        });
+      }
+    );
+    return cleanup;
+  }, [signOut]);
 
-      const backendUpdatedAtRaw = res.preferences.updated_at;
-      const backendUpdatedAtMs = backendUpdatedAtRaw
-        ? Date.parse(String(backendUpdatedAtRaw))
-        : 0;
-      const safeBackendUpdatedAtMs = Number.isNaN(backendUpdatedAtMs)
-        ? 0
-        : backendUpdatedAtMs;
-
-      return safeBackendUpdatedAtMs > localUpdatedAtMs;
-    };
-
-    const chatExists = chats
-      .flatMap((c) => c.chats)
-      .some((c) => c.id === chatId);
+  useEffect(() => {
+    if (!chatsLoaded || !user?.id || !chatId) return;
+    let cancelled = false;
+    const validate = async () => {
+      loadChats();
+      const chats = getGlobalChats();
+      const chatExists = chats.flatMap((c) => c.chats).some((c) => c.id === chatId);
+      if (chatExists) return;
+      if (!chatHasMessages(chatId)) {
+        router.replace("/chat");
+        return;
+      }
+      const backendPreferencesAreNewerThanLocal = async () => {
+        const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(user.id);
+        const res = await fetchUserPreferences();
+        if (!res.ok || !res.preferences) return false;
+        const raw = res.preferences.updated_at;
+        const ms = raw ? Date.parse(String(raw)) : 0;
+        return (Number.isNaN(ms) ? 0 : ms) > localUpdatedAtMs;
+      };
       const [chatsNewer, prefsNewer] = await Promise.all([
         backendChatsAreNewerThanLocal(),
         backendPreferencesAreNewerThanLocal(),
       ]);
-
-      if ((!chatsNewer && !prefsNewer) || cancelled || outOfSyncToastShownRef.current) {
+      if (cancelled) return;
+      if (!chatsNewer && !prefsNewer) {
+        const recovered = recoverChatFromMessages(chatId);
+        if (!recovered) router.replace("/chat");
         return;
       }
-      const recovered = recoverChatFromMessages(chatId);
-      if (!recovered) {
-        router.replace(`/chat`);
+      if (!outOfSyncToastShownRef.current) {
+        outOfSyncToastShownRef.current = true;
+        toast("Your chats are out of date", {
+          id: "backend-out-of-sync",
+          description: "Newer backend data was found. Refresh to sync.",
+          duration: Infinity,
+          action: {
+            label: "Refresh",
+            onClick: () => void syncChatsWithServer().then(() => window.location.reload()),
+          },
+        });
       }
-        description: "Newer backend data was found. Refresh to sync chats and sidebar data.",
-  }, [chatId, chatsLoaded, recoverChatFromMessages, router]);
+    };
+    void validate();
+    return () => { cancelled = true; };
+  }, [chatId, chatsLoaded, recoverChatFromMessages, router, user?.id]);
 
-  // Load chats
   useEffect(() => {
     loadChats();
-    void syncChatsWithServer().finally(() => {
-      setChatsLoaded(true);
-    });
+    void syncChatsWithServer().finally(() => setChatsLoaded(true));
   }, []);
 
   useEffect(() => {
     if (!chatsLoaded) return;
-
     let cancelled = false;
-
     const checkBackendUpdates = async () => {
       if (cancelled || outOfSyncToastShownRef.current) return;
-
       const backendIsNewer = await backendChatsAreNewerThanLocal();
       if (!backendIsNewer || cancelled || outOfSyncToastShownRef.current) return;
-
       outOfSyncToastShownRef.current = true;
-
       toast("Your chats are out of date", {
         id: "backend-out-of-sync",
         description: "Newer chats were found on the backend.",
         duration: Infinity,
         action: {
           label: "Refresh",
-          onClick: () => {
-            void syncChatsWithServer().then(() => {
-              window.location.reload();
-            });
-          },
+          onClick: () => void syncChatsWithServer().then(() => window.location.reload()),
         },
       });
     };
-
     void checkBackendUpdates();
-    const intervalId = window.setInterval(() => {
-      void checkBackendUpdates();
-    }, 45000);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
+    const intervalId = window.setInterval(() => void checkBackendUpdates(), 45000);
+    return () => { cancelled = true; window.clearInterval(intervalId); };
   }, [chatsLoaded, user?.id]);
 
   return (
     <div className="flex min-h-screen bg-blue-950">
-      <div
-        className={`transition-all duration-300 ${showLeft ? "w-64" : "w-0"
-          } overflow-hidden`}
-      >
+      <div className={`transition-all duration-300 ${showLeft ? "w-64" : "w-0"} overflow-hidden`}>
         <SidebarLeft isOpen={showLeft} onToggle={toggleLeft} />
       </div>
-
       <main className="flex-1 flex flex-col relative min-w-0">
         <ChatArea chatId={chatId} />
       </main>
-
       <SidebarRight
         isOpen={showRight}
         onToggle={toggleRight}
@@ -226,13 +209,7 @@ function ChatContent() {
 export default function ChatPage() {
   return (
     <AuthGate>
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center min-h-screen bg-blue-950">
-            <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-          </div>
-        }
-      >
+      <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-blue-950"><Loader2 className="w-8 h-8 animate-spin text-blue-400" /></div>}>
         <ChatContent />
       </Suspense>
     </AuthGate>
