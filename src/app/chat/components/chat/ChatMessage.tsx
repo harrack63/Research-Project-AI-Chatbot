@@ -276,6 +276,9 @@ function InlineReference({ reference }: { reference: SourceReference }) {
 
   const content = (
     <>
+      <span className="mr-1 font-semibold text-blue-300">
+        {reference.id}
+      </span>
       <span className="mr-1 inline-flex align-[-0.15em]">
         <ReferenceIcon sourceType={reference.source_type} />
       </span>
