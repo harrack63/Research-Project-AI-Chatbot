@@ -7,7 +7,7 @@ import SidebarLeft from "~/app/chat/components/sidebarLeft/SidebarLeft";
 import SidebarRight from "~/app/chat/components/sidebarRight/SidebarRight";
 import ChatArea from "~/app/chat/components/chat/ChatArea";
 import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
-import { useAuth } from "~/lib/auth";
+import { useAuth, useUser } from "@clerk/nextjs";
 import {
   backendChatsAreNewerThanLocal,
   chatHasMessages,
@@ -26,7 +26,9 @@ import { initSessionTimeout } from "~/lib/sessionTimeout";
 
 function ChatContent() {
   const outOfSyncToastShownRef = useRef(false);
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
+  const { user } = useUser();
+  const userId = user?.id ?? "";
 
   const recoverChatFromMessages = useCallback((missingChatId: string) => {
     try {
@@ -100,7 +102,7 @@ function ChatContent() {
   useEffect(() => {
     const cleanup = initSessionTimeout(
       () => {
-        signOut();
+        void signOut();
         toast.error("You have been signed out due to inactivity.");
       },
       () => {
@@ -114,7 +116,7 @@ function ChatContent() {
   }, [signOut]);
 
   useEffect(() => {
-    if (!chatsLoaded || !user?.id || !chatId) return;
+    if (!chatsLoaded || !userId || !chatId) return;
     let cancelled = false;
     const validate = async () => {
       loadChats();
@@ -126,7 +128,7 @@ function ChatContent() {
         return;
       }
       const backendPreferencesAreNewerThanLocal = async () => {
-        const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(user.id);
+        const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(userId);
         const res = await fetchUserPreferences();
         if (!res.ok || !res.preferences) return false;
         const raw = res.preferences.updated_at;
@@ -158,7 +160,7 @@ function ChatContent() {
     };
     void validate();
     return () => { cancelled = true; };
-  }, [chatId, chatsLoaded, recoverChatFromMessages, router, user?.id]);
+  }, [chatId, chatsLoaded, recoverChatFromMessages, router, userId]);
 
   useEffect(() => {
     loadChats();
@@ -186,7 +188,7 @@ function ChatContent() {
     void checkBackendUpdates();
     const intervalId = window.setInterval(() => void checkBackendUpdates(), 45000);
     return () => { cancelled = true; window.clearInterval(intervalId); };
-  }, [chatsLoaded, user?.id]);
+  }, [chatsLoaded, userId]);
 
   return (
     <div className="flex min-h-screen bg-blue-950">

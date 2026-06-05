@@ -1,8 +1,8 @@
 // src/app/components/AuthGate.tsx
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useAuth } from "~/lib/auth";
+import { useAuth } from "@clerk/nextjs";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function AuthGate({
@@ -19,10 +19,6 @@ export default function AuthGate({
     }
   }, [isLoaded, isSignedIn, router]);
 
-  const content = useMemo(() => {
-    if (!isLoaded || !isSignedIn) return null; // Show nothing while redirecting
-    return <>{children}</>;
-  }, [children, isSignedIn, isLoaded]);
-
-  return content;
+  if (!isLoaded || !isSignedIn) return null;
+  return <>{children}</>;
 }

@@ -1,6 +1,7 @@
 // src/app/layout.tsx
 "use client";
 
+import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import "~/styles/globals.css";
 import { basePath } from "~/lib/global_vars";
@@ -21,17 +22,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <head>
-        <title>HealthBot</title>
-        <meta name="description" content="HealthBot AI Assistant" />
-        <link rel="icon" href={`${basePath}/favicon.ico`} sizes="any" />
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} bg-neutral min-h-screen text-secondary antialiased`}
-      >
-        {children}
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <head>
+          <title>HealthBot</title>
+          <meta name="description" content="HealthBot AI Assistant" />
+          <link rel="icon" href={`${basePath}/favicon.ico`} sizes="any" />
+        </head>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} bg-neutral min-h-screen text-secondary antialiased`}
+        >
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
