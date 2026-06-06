@@ -1,6 +1,4 @@
-// src/app/layout.tsx
 "use client";
-
 import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import "~/styles/globals.css";
@@ -22,7 +20,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      afterSignInUrl="/chat"
+      afterSignUpUrl="/chat"
+      afterSignOutUrl="/sign-in"
+    >
       <html lang="en">
         <head>
           <title>HealthBot</title>
