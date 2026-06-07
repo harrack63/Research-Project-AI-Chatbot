@@ -1,5 +1,5 @@
 // utils/utils.ts
-import type { ChatImage, Message } from "~/lib/types";
+import type { ChatImage, Message, SourceReference } from "~/lib/types";
 import { API_ROUTES } from "~/lib/api";
 import { getAuthToken } from "~/lib/auth";
 
@@ -15,6 +15,7 @@ export async function sendChatMessageStream(
   userId: string,
   onToken: (token: string) => void,
   onImages?: (images: ChatImage[]) => void,
+  onReferences?: (references: SourceReference[]) => void,
   signal?: AbortSignal
 ): Promise<void> {
   const token = getAuthToken();
@@ -67,6 +68,7 @@ export async function sendChatMessageStream(
         if (data.error) throw new Error(data.error);
         if (data.token) onToken(data.token);
         if (data.images && onImages) onImages(data.images);
+        if (data.references && onReferences) onReferences(data.references);
       } catch (e) {
         console.error("Parse error:", e);
       }

@@ -10,7 +10,8 @@ Backend chat flow uses a LangGraph pipeline with explicit mode routing and post-
   - Auto update from user profile-relevant messages
   - Auto update from explicit user confirmation of prior assistant suggestions
   - Manual updates saved from right sidebar persona editor
-- Retrieval stack in planner mode: Chroma + Milvus (when available)
+- Retrieval stack in planner mode: Docker Milvus at `http://127.0.0.1:19530` for chat history, uploaded documents, and knowledge-base sources; Chroma is only a backend fallback if Milvus is unavailable
+- Assistant messages can include structured references from the SSE stream and render them under the response
 
 ## UploadThing notes
 - Frontend uses UploadThing v7 helpers with typed endpoints.

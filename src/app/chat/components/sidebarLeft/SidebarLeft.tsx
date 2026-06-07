@@ -73,14 +73,11 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
   const [pinnedChatIds, setPinnedChatIds] = useState(() => 
     initializePinnedIds(getGlobalChats())
   );
-  const [isLoaded, setIsLoaded] = useState(false);
 
   // Sync chats to localStorage
   useEffect(() => {
-    if (isLoaded) {
-      setGlobalChats(chats);
-    }
-  }, [chats, isLoaded]);
+    setGlobalChats(chats);
+  }, [chats]);
 
   useEffect(() => {
     const handleChatsUpdate = () => {
@@ -90,10 +87,6 @@ export default function SidebarLeft({ isOpen, onToggle }: SidebarLeftProps) {
 
     window.addEventListener("chats-updated", handleChatsUpdate);
     return () => window.removeEventListener("chats-updated", handleChatsUpdate);
-  }, []);
-
-  useEffect(() => {
-    setIsLoaded(true);
   }, []);
 
   const stableToggle = useCallback(() => {

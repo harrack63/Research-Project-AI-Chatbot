@@ -1,7 +1,6 @@
 import ChatItem from "./chatItem";
 import type { Chat } from "~/lib/types";
 import { useRouter } from 'next/navigation';
-import { basePath } from "~/lib/global_vars";
 
 type CategorySectionProps = {
   label: string;

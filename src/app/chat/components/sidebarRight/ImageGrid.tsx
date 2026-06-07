@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Image from 'next/image';
 
 const images = [
   { src: '/sample1.png', title: 'Scan 1', meta: 'Example metadata' },
@@ -16,7 +17,15 @@ export default function ImageGrid() {
           className="relative bg-white rounded-md shadow hover:shadow-lg cursor-pointer overflow-hidden"
           onClick={() => setFocus(i)}
         >
-          <img src={img.src} alt={img.title} className="w-full h-32 object-cover" />
+          <div className="relative h-32 w-full">
+            <Image
+              src={img.src}
+              alt={img.title}
+              fill
+              sizes="(max-width: 768px) 33vw, 160px"
+              className="object-cover"
+            />
+          </div>
           <p className="text-sm text-center p-1">{img.title}</p>
 
           {/* Expanded overlay */}

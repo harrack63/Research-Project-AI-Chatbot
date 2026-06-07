@@ -1,12 +1,24 @@
 // src/app/chat/components/chat/ChatMessage.tsx
 "use client";
 
-import React, { memo, useCallback, useState } from "react";
+import React, { memo, useCallback, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Message } from "~/lib/types";
+import type { Message, SourceReference } from "~/lib/types";
 import rehypeHighlight from "rehype-highlight";
-import { Check, Copy, Pencil, RotateCcw, Terminal, X } from "lucide-react";
+import {
+  BookOpen,
+  Check,
+  Copy,
+  Database,
+  ExternalLink,
+  FileText,
+  MessageSquareText,
+  Pencil,
+  RotateCcw,
+  Terminal,
+  X,
+} from "lucide-react";
 
 type ChatMessageProps = {
   message: Message;
@@ -27,6 +39,15 @@ const ChatMessage = memo(function ChatMessage({
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(message.content);
   const [busy, setBusy] = useState(false);
+  const referencesById = useMemo(
+    () => buildReferenceMap(message.references),
+    [message.references]
+  );
+  const renderWithInlineReferences = useCallback(
+    (children: React.ReactNode) =>
+      renderInlineReferences(children, referencesById),
+    [referencesById]
+  );
 
   if (isUser) {
     return (
@@ -85,9 +106,16 @@ const ChatMessage = memo(function ChatMessage({
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeHighlight]}
           components={{
-            p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+            p: ({ children }) => (
+              <p className="mb-2 last:mb-0">
+                {renderWithInlineReferences(children)}
+              </p>
+            ),
             pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
             hr: () => <hr className="my-4 border-t border-slate-700" />,
+            li: ({ children }) => (
+              <li className="my-1">{renderWithInlineReferences(children)}</li>
+            ),
             table: ({ children }) => (
               <div className="my-6 w-full overflow-hidden rounded-lg border border-slate-700 bg-slate-900/50">
                 <div className="overflow-x-auto">
@@ -112,12 +140,12 @@ const ChatMessage = memo(function ChatMessage({
             ),
             th: ({ children }) => (
               <th className="px-4 py-3 text-left text-xs font-semibold text-slate-300 uppercase tracking-wider border-r border-slate-700 last:border-r-0">
-                {children}
+                {renderWithInlineReferences(children)}
               </th>
             ),
             td: ({ children }) => (
               <td className="px-4 py-3 text-sm text-slate-300 border-r border-slate-700 last:border-r-0 align-top">
-                {children}
+                {renderWithInlineReferences(children)}
               </td>
             ),
           }}
@@ -142,6 +170,181 @@ type UserBubbleProps = {
   busy: boolean;
   setBusy: (v: boolean) => void;
 };
+
+function referenceLabel(sourceType: string): string {
+  switch (sourceType) {
+    case "chat_history":
+      return "Previous chat";
+    case "medical_kb":
+      return "Medical knowledge base";
+    case "diabetes_recipe":
+      return "Recipe database";
+    case "user_upload":
+      return "Uploaded document";
+    default:
+      return sourceType.replace(/_/g, " ");
+  }
+}
+
+function ReferenceIcon({ sourceType }: { sourceType: string }) {
+  if (sourceType === "chat_history") {
+    return <MessageSquareText className="h-3.5 w-3.5" />;
+  }
+  if (sourceType === "user_upload") {
+    return <FileText className="h-3.5 w-3.5" />;
+  }
+  if (sourceType === "medical_kb" || sourceType === "diabetes_recipe") {
+    return <BookOpen className="h-3.5 w-3.5" />;
+  }
+  return <Database className="h-3.5 w-3.5" />;
+}
+
+function buildReferenceMap(references?: SourceReference[]) {
+  const map = new Map<string, SourceReference>();
+  references?.forEach((reference) => {
+    if (reference.id) map.set(reference.id.toUpperCase(), reference);
+  });
+  return map;
+}
+
+function renderInlineReferences(
+  node: React.ReactNode,
+  referencesById: Map<string, SourceReference>
+): React.ReactNode {
+  if (!referencesById.size) return node;
+
+  return React.Children.map(node, (child) => {
+    if (typeof child === "string") {
+      return replaceReferenceMarkers(child, referencesById);
+    }
+
+    if (!React.isValidElement(child)) return child;
+    if (child.type === "code" || child.type === "pre") return child;
+
+    const props = child.props as { children?: React.ReactNode };
+    if (!props.children) return child;
+
+    return React.cloneElement(child, {
+      children: renderInlineReferences(props.children, referencesById),
+    } as Partial<typeof props>);
+  });
+}
+
+function replaceReferenceMarkers(
+  text: string,
+  referencesById: Map<string, SourceReference>
+): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const markerPattern = /\[(R\d+)\]/gi;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = markerPattern.exec(text)) !== null) {
+    const [marker, rawId] = match;
+    const id = rawId.toUpperCase();
+    const reference = referencesById.get(id);
+
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+
+    parts.push(
+      reference ? (
+        <InlineReference
+          key={`${id}-${match.index}`}
+          reference={reference}
+        />
+      ) : (
+        marker
+      )
+    );
+
+    lastIndex = match.index + marker.length;
+  }
+
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts.length ? parts : text;
+}
+
+function InlineReference({ reference }: { reference: SourceReference }) {
+  const title = readableTitle(reference);
+  const description = readableDescription(reference);
+  const url = referenceUrl(reference);
+  const label = description ? `${title}: ${description}` : title;
+  const className =
+    "not-prose inline rounded-sm border border-blue-400/30 bg-blue-500/10 px-1.5 py-0.5 text-sm font-medium leading-6 text-blue-100 break-words transition-colors";
+
+  const content = (
+    <>
+      <span className="mr-1 font-semibold text-blue-300">
+        {reference.id}
+      </span>
+      <span className="mr-1 inline-flex align-[-0.15em]">
+        <ReferenceIcon sourceType={reference.source_type} />
+      </span>
+      <span className="align-baseline">{label}</span>
+      {url && (
+        <ExternalLink className="ml-1 inline h-3 w-3 align-[-0.1em]" />
+      )}
+    </>
+  );
+
+  if (!url) {
+    return (
+      <span title={`${referenceLabel(reference.source_type)}: ${label}`} className={className}>
+        {content}
+      </span>
+    );
+  }
+
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      title={`${referenceLabel(reference.source_type)}: ${label}`}
+      className={`${className} hover:border-blue-300/60 hover:bg-blue-500/20 hover:text-blue-50`}
+    >
+      {content}
+    </a>
+  );
+}
+
+function readableTitle(reference: SourceReference): string {
+  const title = cleanReferenceText(reference.title);
+  return title || referenceLabel(reference.source_type);
+}
+
+function readableDescription(reference: SourceReference): string {
+  const snippet = cleanReferenceText(reference.snippet);
+  if (!snippet) return "";
+
+  const sentenceMatch = snippet.match(/^.{40,}?[.!?](?=\s|$)/);
+  const sentence = sentenceMatch?.[0] ?? snippet;
+  return truncate(sentence, 140);
+}
+
+function cleanReferenceText(value?: string | null): string {
+  return (value || "").replace(/\s+/g, " ").trim();
+}
+
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, maxLength - 1).trimEnd()}...`;
+}
+
+function referenceUrl(reference: SourceReference): string | null {
+  if (typeof reference.url === "string" && reference.url.trim()) {
+    return reference.url.trim();
+  }
+
+  const metadataUrl = reference.metadata?.url;
+  if (typeof metadataUrl === "string" && metadataUrl.trim()) {
+    return metadataUrl.trim();
+  }
+
+  return null;
+}
 
 function UserBubble({
   message,

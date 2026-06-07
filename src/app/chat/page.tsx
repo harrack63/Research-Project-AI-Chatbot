@@ -10,7 +10,6 @@ import { useKeyboardShortcut } from "~/hooks/useKeyboardShortcut";
 import { useAuth } from "~/lib/auth";
 import {
   backendChatsAreNewerThanLocal,
-  chatHasMessages,
   createNewChat,
   getGlobalChats,
   loadChats,
@@ -115,10 +114,10 @@ function ChatContent() {
 
   // Validate chat exists
   useEffect(() => {
-    if (!chatsLoaded || !user?.id) return;
-    if (!chatsLoaded && !chatHasMessages(chatId)) return;
-    loadChats();
-    const chats = getGlobalChats();
+    if (!chatsLoaded || !user?.id || !chatId) return;
+
+    let cancelled = false;
+
     const backendPreferencesAreNewerThanLocal = async () => {
       const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(user.id);
       const res = await fetchUserPreferences();
@@ -135,23 +134,54 @@ function ChatContent() {
       return safeBackendUpdatedAtMs > localUpdatedAtMs;
     };
 
-    const chatExists = chats
-      .flatMap((c) => c.chats)
-      .some((c) => c.id === chatId);
+    const validateChat = async () => {
+      loadChats();
+      const chats = getGlobalChats();
+      const chatExists = chats
+        .flatMap((c) => c.chats)
+        .some((c) => c.id === chatId);
+
+      if (chatExists || cancelled) return;
+
       const [chatsNewer, prefsNewer] = await Promise.all([
         backendChatsAreNewerThanLocal(),
         backendPreferencesAreNewerThanLocal(),
       ]);
 
-      if ((!chatsNewer && !prefsNewer) || cancelled || outOfSyncToastShownRef.current) {
+      if (cancelled) return;
+
+      if (chatsNewer || prefsNewer) {
+        if (outOfSyncToastShownRef.current) return;
+        outOfSyncToastShownRef.current = true;
+
+        toast("Your data is out of date", {
+          id: "backend-out-of-sync",
+          description: "Newer backend data was found. Refresh to sync chats and sidebar data.",
+          duration: Infinity,
+          action: {
+            label: "Refresh",
+            onClick: () => {
+              void syncChatsWithServer().then(() => {
+                window.location.reload();
+              });
+            },
+          },
+        });
         return;
       }
+
       const recovered = recoverChatFromMessages(chatId);
       if (!recovered) {
         router.replace(`/chat`);
       }
-        description: "Newer backend data was found. Refresh to sync chats and sidebar data.",
-  }, [chatId, chatsLoaded, recoverChatFromMessages, router]);
+    };
+
+    void validateChat();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, chatsLoaded, recoverChatFromMessages, router, user?.id]);
 
   // Load chats
   useEffect(() => {
