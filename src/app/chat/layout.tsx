@@ -1,16 +1,40 @@
-import { Suspense } from "react";
-import { Loader2 } from "lucide-react";
+// src/app/layout.tsx
+"use client";
 
-export default function HomePage({ children }: { children: React.ReactNode }) {
+import { ClerkProvider } from "@clerk/nextjs";
+import { Geist, Geist_Mono } from "next/font/google";
+import "~/styles/globals.css";
+import { basePath } from "~/lib/global_vars";
+
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center min-h-screen bg-blue-950">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
-        </div>
-      }
-    >
-      {children}
-    </Suspense>
+    <ClerkProvider>
+      <html lang="en">
+        <head>
+          <title>HealthBot</title>
+          <meta name="description" content="HealthBot AI Assistant" />
+          <link rel="icon" href={`${basePath}/favicon.ico`} sizes="any" />
+        </head>
+        <body
+          className={`${geistSans.variable} ${geistMono.variable} bg-neutral min-h-screen text-secondary antialiased`}
+        >
+          {children}
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }

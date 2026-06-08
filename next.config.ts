@@ -2,7 +2,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+<<<<<<< HEAD
   basePath: "/healthChatbot",
+=======
+>>>>>>> clerk-auth
   trailingSlash: true,
   images: {
     unoptimized: true,

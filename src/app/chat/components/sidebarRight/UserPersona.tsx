@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, X, Star } from "lucide-react";
 import { fetchUserPreferences, saveUserPreferences } from "~/lib/api";
-import { useAuth } from "~/lib/auth";
+import { useUser } from "@clerk/nextjs";
 import {
   getCachedPreferences,
   setCachedPreferences,
@@ -73,7 +73,7 @@ function Section({ title, isOpen, onToggle, children }: SectionProps) {
         className="w-full flex items-center justify-between p-3 text-left hover:bg-slate-800 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className="text-slate-400">◆</span>
+          <span className="text-slate-400">?</span>
           <span className="text-sm font-medium text-white">{title}</span>
         </div>
         {isOpen ? (
@@ -88,7 +88,7 @@ function Section({ title, isOpen, onToggle, children }: SectionProps) {
 }
 
 export default function UserPersona() {
-  const { user } = useAuth();
+  const { user } = useUser();
   const [persona, setPersona] = useState<PersonaState>(emptyPersona);
   const [goals, setGoals] = useState<string>("");
   const [loading, setLoading] = useState(true);
@@ -104,7 +104,36 @@ export default function UserPersona() {
     goals: true,
   });
 
+<<<<<<< HEAD
   const loadPreferences = useCallback(async (userId: string, silent = false) => {
+=======
+  useEffect(() => {
+    console.log("UserPersona user:", user?.id); if (!user?.id) return;
+    const cached = getCachedPreferences(user.id);
+    if (cached?.persona) {
+      setPersona(cached.persona as PersonaState);
+      setGoals(cached.goals || "");
+      setLoading(false);
+    }
+    if (!fetchedUserIds.has(user.id)) {
+      fetchedUserIds.add(user.id);
+      loadPreferences(user.id, !!cached);
+    } else {
+      setLoading(false);
+    }
+  }, [user?.id]);
+
+  // Auto-calculate BMI when weight or height changes
+  useEffect(() => {
+    if (persona.weight_kg && persona.height_cm) {
+      const heightM = persona.height_cm / 100;
+      const bmi = parseFloat((persona.weight_kg / (heightM * heightM)).toFixed(1));
+      setPersona((prev) => ({ ...prev, BMI: bmi }));
+    }
+  }, [persona.weight_kg, persona.height_cm]);
+
+  const loadPreferences = async (userId: string, silent = false) => {
+>>>>>>> clerk-auth
     try {
       if (!silent) setLoading(true);
       const result = await fetchUserPreferences();
@@ -170,7 +199,6 @@ export default function UserPersona() {
             updatedAt: Number.isNaN(responseUpdatedAtMs) ? Date.now() : responseUpdatedAtMs,
           });
         }
-        // Show success feedback
         const saveBtn = document.getElementById("save-persona-btn");
         if (saveBtn) {
           const originalText = saveBtn.textContent;
@@ -209,6 +237,27 @@ export default function UserPersona() {
     }));
   };
 
+  const completionPercentage = () => {
+    const fields = [
+      persona.age,
+      persona.sex_at_birth,
+      persona.weight_kg,
+      persona.height_cm,
+      persona.BMI,
+      persona.total_cholesterol_mg_dl,
+      persona.blood_pressure_systolic,
+      persona.blood_pressure_diastolic,
+      persona.diabetes_status,
+      persona.physical_activity_level,
+      persona.tobacco_use,
+      persona.sleep_hours,
+      persona.insurance_type,
+      goals,
+    ];
+    const filled = fields.filter((v) => v !== null && v !== undefined && v !== "").length;
+    return Math.round((filled / fields.length) * 100);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -217,9 +266,41 @@ export default function UserPersona() {
     );
   }
 
+  const pct = completionPercentage();
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
+
+        {/* Progress Bar */}
+        <div className="mb-4 p-3 bg-slate-800 rounded-lg border border-slate-700">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-slate-400 font-medium">Profile Completion</span>
+            <span className={`text-xs font-bold ${
+              pct >= 70 ? "text-green-400" :
+              pct >= 40 ? "text-yellow-400" :
+              "text-red-400"
+            }`}>
+              {pct}%
+            </span>
+          </div>
+          <div className="w-full bg-slate-700 rounded-full h-2">
+            <div
+              className={`h-2 rounded-full transition-all duration-500 ${
+                pct >= 70 ? "bg-green-500" :
+                pct >= 40 ? "bg-yellow-500" :
+                "bg-red-500"
+              }`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            {pct < 40 && "Fill in more fields to get personalized health advice"}
+            {pct >= 40 && pct < 70 && "Good progress! Keep filling in your details"}
+            {pct >= 70 && "Great! Your profile is well filled out"}
+          </p>
+        </div>
+
         <Section
           title="Demographics"
           isOpen={sections.demographics}
@@ -322,13 +403,23 @@ export default function UserPersona() {
               />
             </div>
             <div>
-              <label className="block text-xs text-slate-400 mb-1">BMI</label>
+              <label className="block text-xs text-slate-400 mb-1">
+                BMI
+                {persona.weight_kg && persona.height_cm && (
+                  <span className="ml-2 text-blue-400 text-xs">(auto-calculated)</span>
+                )}
+              </label>
               <input
                 type="number"
                 step="0.1"
                 value={persona.BMI || ""}
                 onChange={(e) => updatePersona("BMI", e.target.value ? parseFloat(e.target.value) : null)}
-                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white text-sm"
+                className={`w-full px-3 py-2 bg-slate-800 border rounded text-white text-sm ${
+                  persona.weight_kg && persona.height_cm
+                    ? "border-blue-600 bg-slate-700"
+                    : "border-slate-700"
+                }`}
+                readOnly={!!(persona.weight_kg && persona.height_cm)}
               />
             </div>
           </div>

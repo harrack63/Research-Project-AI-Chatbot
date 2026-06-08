@@ -1,9 +1,10 @@
 // src/app/components/AuthGate.tsx
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { useAuth } from "~/lib/auth";
+import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
+import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 export default function AuthGate({
   children,
@@ -15,14 +16,19 @@ export default function AuthGate({
 
   useEffect(() => {
     if (isLoaded && !isSignedIn) {
-      router.replace("/sign-in");
+      router.replace("/healthChatbot/sign-in");
     }
   }, [isLoaded, isSignedIn, router]);
 
-  const content = useMemo(() => {
-    if (!isLoaded || !isSignedIn) return null; // Show nothing while redirecting
-    return <>{children}</>;
-  }, [children, isSignedIn, isLoaded]);
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-blue-950">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-400" />
+      </div>
+    );
+  }
 
-  return content;
+  if (!isSignedIn) return null;
+
+  return <>{children}</>;
 }

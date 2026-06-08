@@ -109,8 +109,8 @@ export function useAuth() {
           if (!res.ok) {
             const data = await res.json().catch(() => null);
             const errorMessage = data?.detail || data?.message || "Invalid credentials";
-            return { error:
-              typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage
+            return { 
+              error: typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage
             };
           }
 
