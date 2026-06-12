@@ -1,1 +1,1 @@
-export const basePath = "/healthChatbot";
+export const basePath = "";

@@ -69,7 +69,8 @@ const ChatMessage = memo(function ChatMessage({
   // Assistant message
   return (
     <div
-      className="flex justify-start w-full relative group
+      id={`chat-message-${message.id}`}
+      className="flex justify-start w-full relative group scroll-mt-24 rounded-lg transition-shadow duration-300
       prose-th:border prose-th:border-slate-700 prose-th:p-2 prose-th:bg-slate-800 
       prose-td:border prose-td:border-slate-700 prose-td:p-2"
     >
@@ -266,47 +267,154 @@ function replaceReferenceMarkers(
   return parts.length ? parts : text;
 }
 
-function InlineReference({ reference }: { reference: SourceReference }) {
-  const title = readableTitle(reference);
-  const description = readableDescription(reference);
-  const url = referenceUrl(reference);
-  const label = description ? `${title}: ${description}` : title;
-  const className =
-    "not-prose inline rounded-sm border border-blue-400/30 bg-blue-500/10 px-1.5 py-0.5 text-sm font-medium leading-6 text-blue-100 break-words transition-colors";
+/**
+ * Pull a target message id out of a reference's metadata, if one exists.
+ * The backend may key it under several names depending on the retriever, so
+ * we check the common variants and return the first string we find.
+ */
+function resolveJumpTargetId(reference: SourceReference): string | null {
+  const meta = reference.metadata;
+  if (!meta) return null;
+  const keys = [
+    "message_id",
+    "messageId",
+    "chat_message_id",
+    "source_message_id",
+    "chat_id",
+    "chatId",
+  ];
+  for (const key of keys) {
+    const value = meta[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
 
-  const content = (
+/** Smoothly scroll a referenced message into view and flash a highlight ring. */
+function jumpToMessage(targetId: string): void {
+  if (typeof document === "undefined") return;
+  const el = document.getElementById(`chat-message-${targetId}`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const highlight = ["ring-2", "ring-blue-400/70", "ring-offset-2", "ring-offset-slate-950"];
+  el.classList.add(...highlight);
+  window.setTimeout(() => el.classList.remove(...highlight), 1600);
+}
+
+function InlineReference({ reference }: { reference: SourceReference }) {
+  const [showTooltip, setShowTooltip] = useState(false);
+
+  const title = readableTitle(reference);
+  const summary = readableSummary(reference);
+  const url = referenceUrl(reference);
+  const sourceLabel = referenceLabel(reference.source_type);
+  const jumpTargetId =
+    !url && reference.source_type === "chat_history"
+      ? resolveJumpTargetId(reference)
+      : null;
+  const isInteractive = Boolean(url || jumpTargetId);
+
+  const badgeClass =
+    "not-prose inline rounded-sm border border-blue-400/30 bg-blue-500/10 px-1.5 py-0.5 text-sm font-medium leading-6 text-blue-100 break-words transition-colors";
+  const interactiveClass = isInteractive
+    ? " cursor-pointer hover:border-blue-300/60 hover:bg-blue-500/20 hover:text-blue-50"
+    : "";
+
+  const badgeInner = (
     <>
-      <span className="mr-1 font-semibold text-blue-300">
-        {reference.id}
-      </span>
+      <span className="mr-1 font-semibold text-blue-300">{reference.id}</span>
       <span className="mr-1 inline-flex align-[-0.15em]">
         <ReferenceIcon sourceType={reference.source_type} />
       </span>
-      <span className="align-baseline">{label}</span>
-      {url && (
-        <ExternalLink className="ml-1 inline h-3 w-3 align-[-0.1em]" />
-      )}
+      <span className="align-baseline">{title}</span>
+      {url && <ExternalLink className="ml-1 inline h-3 w-3 align-[-0.1em]" />}
     </>
   );
 
-  if (!url) {
+  // The tooltip card: source row, title, article summary, and URL (if any).
+  const tooltip = showTooltip ? (
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute bottom-full left-0 z-50 mb-2 block w-80 max-w-[80vw]
+      rounded-lg border border-slate-700 bg-slate-900/95 p-3 text-left shadow-xl backdrop-blur-sm"
+    >
+      <span className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-300">
+        <ReferenceIcon sourceType={reference.source_type} />
+        {sourceLabel}
+      </span>
+      <span className="block text-sm font-semibold leading-snug text-slate-100">
+        {title}
+      </span>
+      {summary && (
+        <span className="mt-1 block text-xs leading-relaxed text-slate-300">
+          {summary}
+        </span>
+      )}
+      {url && (
+        <span className="mt-2 flex items-center gap-1 truncate text-[11px] text-blue-400">
+          <ExternalLink className="h-3 w-3 shrink-0" />
+          <span className="truncate">{prettyUrl(url)}</span>
+        </span>
+      )}
+      {!url && jumpTargetId && (
+        <span className="mt-2 flex items-center gap-1 text-[11px] text-blue-400">
+          <MessageSquareText className="h-3 w-3 shrink-0" />
+          Jump to referenced message
+        </span>
+      )}
+    </span>
+  ) : null;
+
+  const sharedHoverProps = {
+    onMouseEnter: () => setShowTooltip(true),
+    onMouseLeave: () => setShowTooltip(false),
+    onFocus: () => setShowTooltip(true),
+    onBlur: () => setShowTooltip(false),
+  };
+
+  // External link → open in a new tab.
+  if (url) {
     return (
-      <span title={`${referenceLabel(reference.source_type)}: ${label}`} className={className}>
-        {content}
+      <span className="relative inline-block">
+        {tooltip}
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          className={badgeClass + interactiveClass}
+          {...sharedHoverProps}
+        >
+          {badgeInner}
+        </a>
       </span>
     );
   }
 
+  // Chat-history reference with a resolvable target → scroll to that message.
+  if (jumpTargetId) {
+    return (
+      <span className="relative inline-block">
+        {tooltip}
+        <button
+          type="button"
+          onClick={() => jumpToMessage(jumpTargetId)}
+          className={badgeClass + interactiveClass}
+          {...sharedHoverProps}
+        >
+          {badgeInner}
+        </button>
+      </span>
+    );
+  }
+
+  // Non-navigable reference → informational badge with hover card only.
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      title={`${referenceLabel(reference.source_type)}: ${label}`}
-      className={`${className} hover:border-blue-300/60 hover:bg-blue-500/20 hover:text-blue-50`}
-    >
-      {content}
-    </a>
+    <span className="relative inline-block">
+      {tooltip}
+      <span className={badgeClass} {...sharedHoverProps}>
+        {badgeInner}
+      </span>
+    </span>
   );
 }
 
@@ -315,13 +423,20 @@ function readableTitle(reference: SourceReference): string {
   return title || referenceLabel(reference.source_type);
 }
 
-function readableDescription(reference: SourceReference): string {
+/** Longer, tooltip-friendly summary built from the reference snippet. */
+function readableSummary(reference: SourceReference): string {
   const snippet = cleanReferenceText(reference.snippet);
   if (!snippet) return "";
+  return truncate(snippet, 240);
+}
 
-  const sentenceMatch = snippet.match(/^.{40,}?[.!?](?=\s|$)/);
-  const sentence = sentenceMatch?.[0] ?? snippet;
-  return truncate(sentence, 140);
+function prettyUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname.replace(/^www\./, "") + parsed.pathname;
+  } catch {
+    return url;
+  }
 }
 
 function cleanReferenceText(value?: string | null): string {
@@ -402,7 +517,10 @@ function UserBubble({
   );
 
   return (
-    <div className="flex justify-end w-full group">
+    <div
+      id={`chat-message-${message.id}`}
+      className="flex justify-end w-full group scroll-mt-24 rounded-lg transition-shadow duration-300"
+    >
       <div className="relative bg-blue-600 rounded-lg px-4 py-2 max-w-lg w-full sm:w-auto">
         {/* Actions */}
         <div className="absolute -top-3 right-2 opacity-0 group-hover:opacity-100 transition-opacity">

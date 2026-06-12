@@ -104,36 +104,7 @@ export default function UserPersona() {
     goals: true,
   });
 
-<<<<<<< HEAD
   const loadPreferences = useCallback(async (userId: string, silent = false) => {
-=======
-  useEffect(() => {
-    console.log("UserPersona user:", user?.id); if (!user?.id) return;
-    const cached = getCachedPreferences(user.id);
-    if (cached?.persona) {
-      setPersona(cached.persona as PersonaState);
-      setGoals(cached.goals || "");
-      setLoading(false);
-    }
-    if (!fetchedUserIds.has(user.id)) {
-      fetchedUserIds.add(user.id);
-      loadPreferences(user.id, !!cached);
-    } else {
-      setLoading(false);
-    }
-  }, [user?.id]);
-
-  // Auto-calculate BMI when weight or height changes
-  useEffect(() => {
-    if (persona.weight_kg && persona.height_cm) {
-      const heightM = persona.height_cm / 100;
-      const bmi = parseFloat((persona.weight_kg / (heightM * heightM)).toFixed(1));
-      setPersona((prev) => ({ ...prev, BMI: bmi }));
-    }
-  }, [persona.weight_kg, persona.height_cm]);
-
-  const loadPreferences = async (userId: string, silent = false) => {
->>>>>>> clerk-auth
     try {
       if (!silent) setLoading(true);
       const result = await fetchUserPreferences();

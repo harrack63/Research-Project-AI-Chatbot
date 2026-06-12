@@ -1,6 +1,5 @@
 // src/app/chat/page.tsx
 "use client";
-
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import SidebarLeft from "~/app/chat/components/sidebarLeft/SidebarLeft";
@@ -28,7 +27,6 @@ function ChatContent() {
   const { signOut } = useAuth();
   const { user } = useUser();
   const userId = user?.id ?? "";
-
   const recoverChatFromMessages = useCallback((missingChatId: string) => {
     try {
       const stored = localStorage.getItem(`healthbot_messages_${missingChatId}`);
@@ -43,7 +41,6 @@ function ChatContent() {
       return false;
     }
   }, []);
-
   const [showLeft, setShowLeft] = useState(() => {
     try {
       const savedState = localStorage.getItem("sidebarLeftOpen");
@@ -62,7 +59,6 @@ function ChatContent() {
   });
   const [rightWidth, setRightWidth] = useState(400);
   const [chatsLoaded, setChatsLoaded] = useState(false);
-
   const searchParams = useSearchParams();
   const router = useRouter();
   const chatId = searchParams.get("id") || "";
@@ -74,7 +70,6 @@ function ChatContent() {
       return newState;
     });
   };
-
   const toggleRight = () => {
     setShowRight((p) => {
       const newValue = !p;
@@ -88,7 +83,6 @@ function ChatContent() {
       return newValue;
     });
   };
-
   const handleRightWidthChange = useCallback((newWidth: number) => {
     setRightWidth(newWidth);
     const mainWidth = window.innerWidth - newWidth;
@@ -99,37 +93,6 @@ function ChatContent() {
   useKeyboardShortcut("l", toggleRight);
 
   useEffect(() => {
-<<<<<<< HEAD
-    if (!chatsLoaded || !user?.id || !chatId) return;
-
-    let cancelled = false;
-
-    const backendPreferencesAreNewerThanLocal = async () => {
-      const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(user.id);
-      const res = await fetchUserPreferences();
-      if (!res.ok || !res.preferences) return false;
-
-      const backendUpdatedAtRaw = res.preferences.updated_at;
-      const backendUpdatedAtMs = backendUpdatedAtRaw
-        ? Date.parse(String(backendUpdatedAtRaw))
-        : 0;
-      const safeBackendUpdatedAtMs = Number.isNaN(backendUpdatedAtMs)
-        ? 0
-        : backendUpdatedAtMs;
-
-      return safeBackendUpdatedAtMs > localUpdatedAtMs;
-    };
-
-    const validateChat = async () => {
-      loadChats();
-      const chats = getGlobalChats();
-      const chatExists = chats
-        .flatMap((c) => c.chats)
-        .some((c) => c.id === chatId);
-
-      if (chatExists || cancelled) return;
-
-=======
     const cleanup = initSessionTimeout(
       () => {
         void signOut();
@@ -146,38 +109,35 @@ function ChatContent() {
   }, [signOut]);
 
   useEffect(() => {
-    if (!chatsLoaded || !userId || !chatId) return;
+    if (!chatsLoaded || !user?.id || !chatId) return;
     let cancelled = false;
-    const validate = async () => {
+
+    const backendPreferencesAreNewerThanLocal = async () => {
+      const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(user.id);
+      const res = await fetchUserPreferences();
+      if (!res.ok || !res.preferences) return false;
+      const backendUpdatedAtRaw = res.preferences.updated_at;
+      const backendUpdatedAtMs = backendUpdatedAtRaw ? Date.parse(String(backendUpdatedAtRaw)) : 0;
+      const safeBackendUpdatedAtMs = Number.isNaN(backendUpdatedAtMs) ? 0 : backendUpdatedAtMs;
+      return safeBackendUpdatedAtMs > localUpdatedAtMs;
+    };
+
+    const validateChat = async () => {
       loadChats();
       const chats = getGlobalChats();
       const chatExists = chats.flatMap((c) => c.chats).some((c) => c.id === chatId);
-      if (chatExists) return;
-      if (!chatHasMessages(chatId)) {
-        router.replace("/chat");
-        return;
-      }
-      const backendPreferencesAreNewerThanLocal = async () => {
-        const localUpdatedAtMs = getCachedPreferencesUpdatedAtMs(userId);
-        const res = await fetchUserPreferences();
-        if (!res.ok || !res.preferences) return false;
-        const raw = res.preferences.updated_at;
-        const ms = raw ? Date.parse(String(raw)) : 0;
-        return (Number.isNaN(ms) ? 0 : ms) > localUpdatedAtMs;
-      };
->>>>>>> clerk-auth
+      if (chatExists || cancelled) return;
+
       const [chatsNewer, prefsNewer] = await Promise.all([
         backendChatsAreNewerThanLocal(),
         backendPreferencesAreNewerThanLocal(),
       ]);
-<<<<<<< HEAD
 
       if (cancelled) return;
 
       if (chatsNewer || prefsNewer) {
         if (outOfSyncToastShownRef.current) return;
         outOfSyncToastShownRef.current = true;
-
         toast("Your data is out of date", {
           id: "backend-out-of-sync",
           description: "Newer backend data was found. Refresh to sync chats and sidebar data.",
@@ -185,9 +145,7 @@ function ChatContent() {
           action: {
             label: "Refresh",
             onClick: () => {
-              void syncChatsWithServer().then(() => {
-                window.location.reload();
-              });
+              void syncChatsWithServer().then(() => window.location.reload());
             },
           },
         });
@@ -195,41 +153,12 @@ function ChatContent() {
       }
 
       const recovered = recoverChatFromMessages(chatId);
-      if (!recovered) {
-        router.replace(`/chat`);
-      }
+      if (!recovered) router.replace("/chat");
     };
 
     void validateChat();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [chatId, chatsLoaded, recoverChatFromMessages, router, user?.id]);
-=======
-      if (cancelled) return;
-      if (!chatsNewer && !prefsNewer) {
-        const recovered = recoverChatFromMessages(chatId);
-        if (!recovered) router.replace("/chat");
-        return;
-      }
-      if (!outOfSyncToastShownRef.current) {
-        outOfSyncToastShownRef.current = true;
-        toast("Your chats are out of date", {
-          id: "backend-out-of-sync",
-          description: "Newer backend data was found. Refresh to sync.",
-          duration: Infinity,
-          action: {
-            label: "Refresh",
-            onClick: () => void syncChatsWithServer().then(() => window.location.reload()),
-          },
-        });
-      }
-    };
-    void validate();
     return () => { cancelled = true; };
-  }, [chatId, chatsLoaded, recoverChatFromMessages, router, userId]);
->>>>>>> clerk-auth
+  }, [chatId, chatsLoaded, recoverChatFromMessages, router, user?.id]);
 
   useEffect(() => {
     loadChats();
